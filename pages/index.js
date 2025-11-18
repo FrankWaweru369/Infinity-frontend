@@ -2,7 +2,7 @@
 export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-infinityBlue via-infinityPurple to-infinityPink text-white">
-      <h2 className="text-5xl font-bold mb-4">Welcome to Infinity</h2>
+      <h3 className="text-5xl font-bold mb-4">Welcome to Infinity</h3>
       <p className="text-lg mb-8 text-center max-w-md">
         Beyond the scroll, real connections are made.<br></br>
 Click register or login to continue.
