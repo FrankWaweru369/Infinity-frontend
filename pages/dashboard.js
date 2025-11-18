@@ -413,7 +413,7 @@ const handleDelete = async (postId) => {
               <p className="mb-2 text-sm">{post.content}</p>
               {post.image && (
                 <img
-                  src={`${config.apiUrl.replace('/api', '')}${post.image}`}
+                  src={post.image}
                   alt="Post"
                   className="rounded-md w-full object-cover mb-2"
                 />

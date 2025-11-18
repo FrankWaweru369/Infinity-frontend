@@ -78,16 +78,9 @@ const [previewImage, setPreviewImage] = useState(null);
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Helper to build image URL coming from backend (supports "/uploads/..." or full URL)
-  const imageUrl = (img) => {
-  if (!img) return null;
-
-
-  if (img.startsWith("http://") || img.startsWith("https://")) return img;
-
-  // Force it to point to backend
-  const backendBase = config.apiUrl.replace('/api', '');
-  return `${backendBase}${img.startsWith("/") ? img : `/${img}`}`;
+  
+  const imageUrl = (postImage) => {
+  return postImage || null;
 };
 
   // Close modal function
