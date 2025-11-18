@@ -1044,6 +1044,18 @@ const handleProfilePictureChange = async (e) => {
         placeholder="Edit your post..."
       />
 
+
+		editPost?.image && !previewImage && (
+  <div className="mb-3">
+    <p className="text-sm text-gray-600 mb-1">Current image:</p>
+    <img
+      src={editPost.image}
+      alt="Current post"
+      className="rounded-lg max-h-40 object-cover w-full"
+    />
+  </div>
+)}
+
       {/* Preview Image */}
       {previewImage && (
         <div className="relative mb-3">
