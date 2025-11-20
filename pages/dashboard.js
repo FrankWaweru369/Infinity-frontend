@@ -25,6 +25,12 @@ import Link from "next/link";
 const API_BASE = config.apiUrl;
 
 export default function Dashboard() {
+
+alert("🟢 Dashboard loading...");
+  
+  // Check user data
+  alert(`Dashboard user: ${user ? "Exists" : "NULL"}`);
+  alert(`Dashboard username: ${user?.username || "No username"}`);
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [content, setContent] = useState("");
