@@ -19,11 +19,12 @@ import {
   FiPlus,
   FiVideo,
   FiSearch,
+  FiTrash2,
 } from "react-icons/fi";
 import { FaHeart, FaVenusMars } from "react-icons/fa";
 import { User, Info, MapPin, Globe, Phone, Calendar, Edit3, UserCircle } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 
 const API_BASE = config.apiUrl;
@@ -64,7 +65,58 @@ export default function ProfilePage() {
 const [editText, setEditText] = useState("");
 const [editImage, setEditImage] = useState(null);
 const [previewImage, setPreviewImage] = useState(null);
- const [activeCommentsPost, setActiveCommentsPost] = useState(null);
+const [activeCommentsPost, setActiveCommentsPost] = useState(null);
+const [commentLoading, setCommentLoading] = useState({});
+
+const dropdownRef = useRef(null);
+
+// Close dropdown when clicking outside
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      setMenuOpenFor(null);
+    }
+  };
+
+  // Add event listener when dropdown is open
+  if (menuOpenFor) {
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+  }
+
+  // Cleanup
+  return () => {
+    document.removeEventListener('mousedown', handleClickOutside);
+    document.removeEventListener('touchstart', handleClickOutside);
+  };
+}, [menuOpenFor]);
+
+const modalRef = useRef(null); 
+
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (modalRef.current && !modalRef.current.contains(event.target)) {
+      closeModal();
+    }
+  };
+
+  const handleScroll = () => {
+    closeModal();
+  };
+
+  if (modalType) {
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('scroll', handleScroll, true);
+  }
+
+  return () => {
+    document.removeEventListener('mousedown', handleClickOutside);
+    document.removeEventListener('touchstart', handleClickOutside);
+    document.removeEventListener('scroll', handleScroll, true);
+  };
+}, [modalType]);
+
 
 
   // Get current logged-in user id from localStorage (if available)
@@ -157,9 +209,9 @@ useEffect(() => {
         headers: getAuthHeaders(),
       });
       const updated = await res.json();
-      // update userPosts list
+      
       setUserPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
-      // also update global posts in context if setter exists
+      
       if (postsContext && typeof postsContext.setPosts === "function") {
         postsContext.setPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
       }
@@ -176,7 +228,9 @@ useEffect(() => {
 
   const handleComment = async (postId) => {
   const text = commentInputs[postId];
-  if (!text?.trim()) return;
+  if (!text?.trim() || commentLoading[postId]) return;
+
+  setCommentLoading(prev => ({ ...prev, [postId]: true }))
 
   try {
     const res = await fetch(`${API_BASE}/posts/${postId}/comment`, {
@@ -206,11 +260,14 @@ useEffect(() => {
     }
 
     setCommentInputs({ ...commentInputs, [postId]: "" });
-    alert("Comment added successfully!");
+    
   } catch (err) {
     alert("Error adding comment. Please try again.");
+  } finally {
+    setCommentLoading(prev => ({ ...prev, [postId]: false }));
   }
 };
+
 
   // Delete post (only for owner)
   const handleDelete = async (postId) => {
@@ -234,34 +291,35 @@ useEffect(() => {
   };
 
   // --- Edit Post ---
-const handleEdit = (post) => {
-  setEditPost(post);
-  setEditText(post.content || ""); // safer if content is missing
-  setEditImage(null);
-  setPreviewImage(
-    post.image ? `${API_BASE.replace("/api", "")}${post.image}` : null
-  );
+const handleEdit = (post) => {                                                                         setEditPost(post);
+  setEditText(post.content || ""); // safer if content is missing                                      setEditImage(null);                                                                                  setPreviewImage( null);
 };
 
 // --- Handle Image File Change ---
-const handleFileChange = (e) => {
-  const file = e.target.files?.[0];
+const handleFileChange = (e) => {                                                                      const file = e.target.files?.[0];
   if (file) {
-    setEditImage(file);
-    setPreviewImage(URL.createObjectURL(file));
+    setEditImage(file);                                                                                  setPreviewImage(URL.createObjectURL(file));
   }
 };
 
-                                                                                     
-//--save edited post--
-const handleSaveEdit = async () => {
-  if (!editPost) return;                                                                                              
-  try {
+                                                                                                     // --- Save the Edited Post ---
+const handleSaveEdit = async () => {                                                                   if (!editPost) return;
+                                                                                                       try {
     const formData = new FormData();
     formData.append("content", editText || "");
-    if (editImage) formData.append("image", editImage);
 
-    const res = await axios.put(                                                                                            `${API_BASE}/posts/${editPost._id}`,
+
+
+    if (editImage) {
+      formData.append("image", editImage);
+
+    } else if (!editPost.image) {
+      formData.append("removeImage", "true");
+
+    }
+
+    const res = await axios.put(
+      `${API_BASE}/posts/${editPost._id}`,
       formData,
       {
         headers: {
@@ -269,9 +327,10 @@ const handleSaveEdit = async () => {
           "Content-Type": "multipart/form-data",
         },
       }
-    );                                                                                                                
+    );
+
     if (res.data && res.data.post) {
-      // ✅ Update the post list immediately
+      alert(`✅ Post updated successfully!`);
       setPosts((prev) =>
         prev.map((p) => (p._id === editPost._id ? res.data.post : p))
       );
@@ -279,17 +338,11 @@ const handleSaveEdit = async () => {
       setEditText("");
       setPreviewImage(null);
       setEditImage(null);
-      alert("Post updated successfully!");
-    } else {
-      console.error("Invalid server response:", res.data);
-      alert("Server did not return updated post data.");
     }
   } catch (err) {
-    console.error("Error editing post:", err?.response || err);
-    alert("Failed to update post.");
+    alert("❌ Failed to update post. Please try again.");
   }
 };
-
 
 const handleProfileSave = async () => {
   try {
@@ -378,6 +431,41 @@ const handleProfilePictureChange = async (e) => {
   }
 };
 
+
+const getAvatar = (src, username, size = 8) => {
+  const getInitials = (name) => {
+    if (!name) return "U";
+    return name
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 2);
+  };
+
+  const sizeClasses = {
+    6: 'w-6 h-6 text-xs',
+    8: 'w-8 h-8 text-sm',
+    12: 'w-12 h-12 text-base',
+    16: 'w-16 h-16 text-lg'
+  };
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={username || "User"}
+        className={`rounded-full ${sizeClasses[size]} object-cover`}
+      />
+    );
+  }
+
+  return (
+    <div className={`rounded-full bg-black text-white flex items-center justify-center font-semibold ${sizeClasses[size]}`}>
+      {getInitials(username)}
+    </div>
+  );
+};
+
   // Guard SSR
   if (!router.isReady) return <p>Loading...</p>;
   if (loadingUser) return <p className="p-5 text-center">Loading user...</p>;
@@ -385,7 +473,7 @@ const handleProfilePictureChange = async (e) => {
   if (!user) return <p className="p-5 text-center">User not found</p>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 pb-6">
   {/* Top Bar */}
 <div className="flex items-center justify-between bg-white p-4 shadow-md sticky top-0 z-20">
   <button
@@ -400,15 +488,21 @@ const handleProfilePictureChange = async (e) => {
 </div>
 
 {/* Profile Header */}
-<div className="relative bg-white shadow-md rounded-lg overflow-visible mt-4">
+<div className="relative bg-white shadow-md rounded-lg overflow-visible mt-1">
   {/* Cover Photo */}
   <div className="relative w-full h-44 md:h-52 bg-gray-200 rounded-t-lg">
 
-	<img
-  src={imageUrl(user.coverPhoto) || "/default-cover.jpg"}
-  alt={`${user.username} cover`}
-  className="w-full h-full object-cover rounded-t-lg"
-/>
+	{user.coverPhoto ? (
+  <img
+    src={imageUrl(user.coverPhoto)}
+    alt={`${user.username} cover`}
+    className="w-full h-full object-cover rounded-t-lg"
+  />
+) : (
+  <div className="w-full h-full bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-800 rounded-t-lg flex items-center justify-center">
+    <span className="text-white text-xl font-bold opacity-80">No cover photo yet</span>
+  </div>
+)}
 
     {/* Edit Cover Photo Icon */}
     {currentUserId === user._id && (
@@ -430,11 +524,7 @@ const handleProfilePictureChange = async (e) => {
     <div className="flex items-center space-x-6 md:space-x-8">
       {/* Profile Picture */}
       <div className="relative -mt-16">
-        <img
-          src={imageUrl(user.profilePicture) || `https://i.pravatar.cc/150?u=${user.username}`}
-          alt={user.username}
-          className="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-white object-cover shadow-lg z-10"
-        />
+        {getAvatar(imageUrl(user.profilePicture), user.username, 16)}
         {/* Edit Profile Picture Icon */}
         {currentUserId === user._id && (
           <label className="absolute bottom-1 right-1 bg-black bg-opacity-50 hover:bg-opacity-70 p-1.5 rounded-full cursor-pointer">
@@ -506,7 +596,7 @@ const handleProfilePictureChange = async (e) => {
 	
 
 {/* About Section */}
-<div className="bg-white p-6 shadow-md rounded-2xl mt-4 border border-gray-100">
+<div className="bg-white p-6 shadow-md rounded-2xl mt-1 border border-gray-100">
   <div className="flex justify-between items-center mb-4">
     <div className="flex items-center gap-2">
       <UserCircle className="text-purple-600" size={22} />
@@ -736,23 +826,6 @@ const handleProfilePictureChange = async (e) => {
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
           />
         </div>
-
-	<input
-  type="file"
-  accept="image/*"
-  onChange={(e) =>
-    setEditData({ ...editData, profilePicture: e.target.files[0] })
-  }
-  className="w-full border rounded p-2"
-/>
-<input
-  type="file"
-  accept="image/*"
-  onChange={(e) =>
-    setEditData({ ...editData, coverPhoto: e.target.files[0] })
-  }
-  className="w-full border rounded p-2"
-/>
       </div>
 
       {/* Save Button */}
@@ -789,7 +862,7 @@ const handleProfilePictureChange = async (e) => {
 )}
 
       {/* User's Posts */}
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-1">
         {postsLoading ? (
           <p>Loading posts...</p>
         ) : userPosts.length === 0 ? (
@@ -808,14 +881,7 @@ const handleProfilePictureChange = async (e) => {
                     className="flex items-center space-x-3 mb-3 cursor-pointer"
                     onClick={() => router.push(`/profile/${post.author?.username ?? "guest"}`)}
                   >
-                    <img
-  src={
-    imageUrl(post.author?.profilePicture) ||
-    `https://i.pravatar.cc/150?u=${post.author?.username ?? "anon"}`
-  }
-  alt={post.author?.username}
-  className="w-10 h-10 rounded-full object-cover"
-/>
+                    {getAvatar(imageUrl(post.author?.profilePicture), post.author?.username, 8)}
                     <span className="font-semibold">{post.author?.username ?? "unknown"}</span>
                   </div>
 
@@ -870,11 +936,7 @@ const handleProfilePictureChange = async (e) => {
             href={`/profile/${u.username}`}
             className="flex items-center space-x-2 p-2 bg-gray-50 border border-gray-100 rounded-md hover:opacity-80 transition"
           >
-            <img
-              src={imageUrl(u.profilePicture) || `https://i.pravatar.cc/32?u=${u.username}`}
-              alt={u.username}
-              className="w-7 h-7 rounded-full"
-            />
+            {getAvatar(imageUrl(u.profilePicture), u.username, 6)}
             <span className="text-sm hover:underline">{u.username}</span>
           </a>
         ))
@@ -900,38 +962,42 @@ const handleProfilePictureChange = async (e) => {
                   </div>
 
                   {/* Three-dot menu for Edit/Delete */}
-                  {post.author?._id === currentUserId && (
-                    <div className="ml-auto relative">
-                      {/* Menu Button */}
-                      <button
-                        onClick={() =>
-                          setMenuOpenFor(menuOpenFor === post._id ? null : post._id)
-                        }
-                        className="p-1 hover:bg-gray-200 rounded-full"
-                      >
-                        <FiMoreHorizontal className="w-5 h-5" />
-                      </button>
+{post.author?._id === currentUserId && (
+  <div className="ml-auto relative">
+    {/* Menu Button */}
+    <button
+      onClick={() =>
+        setMenuOpenFor(menuOpenFor === post._id ? null : post._id)
+      }
+      className="p-1 hover:bg-gray-200 rounded-full"
+    >
+      <FiMoreHorizontal className="w-5 h-5" />
+    </button>
 
-                      {/* Dropdown */}
-                      {menuOpenFor === post._id && (
-                        <div className="absolute right-0 mt-2 w-24 bg-white border rounded shadow-md z-50">
-                          <button
-                            onClick={() => handleEdit(post)}
-                            className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(postId)}
-                            className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+    {/* Dropdown */}
+    {menuOpenFor === post._id && (
+      <div
+        ref={dropdownRef}
+        className="absolute right-0 mt-2 w-24 bg-white border rounded shadow-md z-50"
+      >
+        <button
+          onClick={() => handleEdit(post)}
+          className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => handleDelete(post._id)} 
+          className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100"
+        >
+          Delete
+        </button>
+      </div>
+    )}
+  </div>
+)}
+                           
+	</div>
 
                   
    {/* Comments */}
@@ -941,9 +1007,7 @@ const handleProfilePictureChange = async (e) => {
       {/* Show top comment only */}
       {post.comments.slice(0, 1).map((c, i) => {
         const username = c.user?.username ?? "user";
-        const avatar =
-          imageUrl(c.user?.profilePicture) ||
-          `https://i.pravatar.cc/150?u=${username}`;
+        const avatarSrc = imageUrl(c.user?.profilePicture);
         const text = c.text ?? c;
         return (
   <div
@@ -952,11 +1016,7 @@ const handleProfilePictureChange = async (e) => {
   >
     {/* Avatar */}
     <a href={`/profile/${c.user.username}`}>
-      <img
-        src={avatar}
-        alt={username}
-        className="w-7 h-7 rounded-full hover:opacity-80 transition"
-      />
+      {getAvatar(avatarSrc, username, 8)}
     </a>
 
     {/* Username + Comment */}
@@ -1004,11 +1064,16 @@ const handleProfilePictureChange = async (e) => {
       className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
     />
     <button
-      onClick={() => handleComment(post._id)}
-      className="bg-purple-600 text-white px-3 py-1 rounded"
-    >
-      Post
-    </button>
+  onClick={() => handleComment(post._id)}
+  disabled={commentLoading[post._id]}
+  className={`px-3 py-1 rounded ${
+    commentLoading[post._id] 
+      ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+      : "bg-purple-600 text-white hover:bg-purple-700"
+  }`}
+>
+  {commentLoading[post._id] ? "Posting..." : "Post"}
+</button>
   </div>
 </div>
 </div>
@@ -1017,7 +1082,8 @@ const handleProfilePictureChange = async (e) => {
 )}
 </div>
 
-	{editPost && (
+   
+                  {editPost && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-white p-4 rounded-lg shadow-lg w-80 relative">
       {/* Close Button */}
@@ -1044,21 +1110,22 @@ const handleProfilePictureChange = async (e) => {
         placeholder="Edit your post..."
       />
 
-
-		editPost?.image && !previewImage && (
-  <div className="mb-3">
-    <p className="text-sm text-gray-600 mb-1">Current image:</p>
-    <img
-      src={editPost.image}
-      alt="Current post"
-      className="rounded-lg max-h-40 object-cover w-full"
-    />
-  </div>
-)}
+      {/* Image Display */}
+      {editPost?.image && !previewImage && (
+        <div className="mb-3">
+          <p className="text-sm text-gray-600 mb-1">Current image:</p>
+          <img
+            src={editPost.image}
+            alt="Current post"
+            className="rounded-lg max-h-40 object-cover w-full"
+          />
+        </div>
+      )}
 
       {/* Preview Image */}
       {previewImage && (
         <div className="relative mb-3">
+          <p className="text-sm text-gray-600 mb-1">New image preview:</p>
           <img
             src={previewImage}
             alt="Preview"
@@ -1073,20 +1140,66 @@ const handleProfilePictureChange = async (e) => {
           >
             <FiX />
           </button>
+          <p className="text-xs text-gray-500 mt-1">
+            This will replace the current image
+          </p>
         </div>
       )}
 
-      {/* Change Image */}
-      <label className="flex items-center space-x-2 text-purple-600 cursor-pointer mb-3 hover:text-purple-800">
-        <FiCamera />
-        <span>{editImage ? "Change Image" : "Add Image"}</span>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-      </label>
+      {/* No Image State - Show when image is removed */}
+      {!editPost?.image && !previewImage && (
+        <div className="mb-3 p-4 border border-dashed border-gray-300 rounded-lg text-center">
+          <FiImage className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">No image in this post</p>
+        </div>
+      )}
+
+      {/* Image Action Buttons */}
+      <div className="space-y-2 mb-3">
+        {/* Change/Add Image Button */}
+        <label className="flex items-center space-x-2 text-purple-600 cursor-pointer hover:text-purple-800 p-2 rounded hover:bg-purple-50">
+          <FiCamera />
+          <span>
+            {previewImage ? "Change New Image" : editPost?.image ? "Change Image" : "Add Image"}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </label>
+
+        {/* Remove Image Button - Only show if there's a current image and no preview */}
+           {editPost?.image && !previewImage && (
+  <button
+    onClick={() => {
+
+
+      // Remove the image from the post
+      setEditPost(prev => ({
+        ...prev,
+        image: null
+      }));
+
+
+
+      // Also update the main posts array for instant UI feedback
+      setPosts(prev => prev.map(post =>
+        post._id === editPost._id
+          ? { ...post, image: null }
+          : post
+      ));
+      setPreviewImage(null);
+      setEditImage(null);
+    }}
+    className="flex items-center space-x-2 text-red-600 cursor-pointer hover:text-red-800 p-2 rounded hover:bg-red-50 w-full text-sm"
+  >
+    <FiTrash2 />
+    <span>Remove Image</span>
+  </button>
+)}
+                </div>
 
       {/* Save Button */}
       <button
@@ -1098,7 +1211,6 @@ const handleProfilePictureChange = async (e) => {
     </div>
   </div>
 )}
-
                   {/* Comments Modal */}
 {activeCommentsPost && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
@@ -1114,9 +1226,7 @@ const handleProfilePictureChange = async (e) => {
       </h2>
 
       {activeCommentsPost.comments.map((c, i) => {                                                                            const username = c.user?.username ?? "user";
-        const avatar =
-          imageUrl(c.user?.profilePicture) ||
-          `https://i.pravatar.cc/150?u=${username}`;
+        const avatarSrc = imageUrl(c.user?.profilePicture);
         const text = c.text ?? c;
         return (
   <div
@@ -1125,11 +1235,7 @@ const handleProfilePictureChange = async (e) => {
   >
     {/* Avatar */}
     <a href={`/profile/${c.user.username}`}>
-      <img
-        src={avatar}
-        alt={username}
-        className="w-7 h-7 rounded-full hover:opacity-80 transition"
-      />
+      {getAvatar(avatarSrc, username, 6)}
     </a>
     {/* Username + Comment */}
     <div className="flex flex-col">
@@ -1152,7 +1258,7 @@ const handleProfilePictureChange = async (e) => {
       {/* Followers / Following Modal */}
 {modalType && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-    <div className="bg-white w-80 rounded-lg shadow-lg p-4 relative">
+    <div className="bg-white w-80 rounded-lg shadow-lg p-4 relative"ref={modalRef}>
       {/* Close button */}
       <button
         onClick={closeModal}
@@ -1177,11 +1283,7 @@ const handleProfilePictureChange = async (e) => {
               {/* ✅ User profile link */}
               <Link href={`/profile/${u.username}`}>
                 <div className="flex items-center space-x-2">
-                  <img
-                    src={imageUrl(u.profilePicture) || `https://i.pravatar.cc/150?u=${u.username}`}
-                    alt={u.username}
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
+                  {getAvatar(imageUrl(u.profilePicture), u.username, 6)}
                   <span className="text-sm font-medium">{u.username}</span>
                 </div>
               </Link>
@@ -1224,48 +1326,62 @@ const handleProfilePictureChange = async (e) => {
     </div>
   </div>
 )}
-
-   {/* 🌐 Glassy Bottom Navbar */}
-<div className="fixed bottom-0 left-0 w-full z-50 bg-white/40 backdrop-blur-md border-t border-white/20 shadow-lg flex justify-around items-center py-2">
+  {/* bottom navbar */}
+<div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 flex justify-around items-center py-1">
   {/* Home */}
   <div
-    onClick={() => router.push("/dashboard")}                                                            className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
+    onClick={() => router.push("/dashboard")}
+    className={`flex flex-col items-center transition cursor-pointer ${
+      router.pathname === "/dashboard" 
+        ? "text-purple-600" 
+        : "text-gray-700 hover:text-purple-600"
+    }`}
   >
-    <FiHome className="w-6 h-6" />
-    <span className="text-xs mt-1">Home</span>                                                         </div>
+    <FiHome className="w-5 h-5" />
+    <span className="text-xs">Home</span>
+  </div>
 
   {/* Explore */}
   <div
     onClick={() => alert("Explore feature coming soon!")}
-    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"                                                                                                    >                                                                                                      <FiSearch className="w-6 h-6" />
-    <span className="text-xs mt-1">Explore</span>                                                      </div>
+    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
+  >
+    <FiSearch className="w-5 h-5" />
+    <span className="text-xs">Explore</span>
+  </div>
 
   {/* Floating Post Button - Centered */}
   <div className="relative -top-1">
     <button
       onClick={() => alert("Post feature coming soon!")}
-      className="bg-purple-600 text-white rounded-full p-3 shadow-lg hover:bg-purple-700 transition"
+      className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
     >
       <FiPlus className="w-6 h-6" />
-    </button>                                                                                          </div>
+    </button>
+  </div>
 
   {/* Reels */}
   <div
     onClick={() => alert("Reels feature coming soon!")}
     className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
   >
-    <FiVideo className="w-6 h-6" />
-    <span className="text-xs mt-1">Reels</span>
+    <FiVideo className="w-5 h-5" />
+    <span className="text-xs">Reels</span>
   </div>
 
   {/* Profile */}
-  <Link href={`/profile/${user?.username || ""}`} className="hover:text-purple-600 transition">
-    <div className="flex flex-col items-center">
-      <FiUser className="w-6 h-6" />
-      <span className="text-xs mt-1">Profile</span>
+  <Link href={`/profile/${user?.username || ""}`} className="transition">
+    <div className={`flex flex-col items-center ${
+      router.pathname.includes("/profile") 
+        ? "text-purple-600" 
+        : "text-gray-700 hover:text-purple-600"
+    }`}>
+      <FiUser className="w-5 h-5" />
+      <span className="text-xs">Profile</span>
     </div>
   </Link>
 </div>
-    </div>
-  );
+
+   </div>
+	   );                  
 }

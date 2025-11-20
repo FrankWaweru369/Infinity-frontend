@@ -15,10 +15,12 @@ import {
   FiCamera,
   FiPlus,
   FiVideo,
+  FiTrash2
 } from "react-icons/fi";
 import { FaHeart } from "react-icons/fa";
 import axios from "axios";
 import Link from "next/link";
+
 
 const API_BASE = config.apiUrl;
 
@@ -39,6 +41,23 @@ export default function Dashboard() {
   const [editImage, setEditImage] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [activeCommentsPost, setActiveCommentsPost] = useState(null);
+  const [commentLoading, setCommentLoading] = useState({});
+
+const currentPath = router.pathname;
+
+const dropdownRef = useRef(null);
+
+// Close dropdown when clicking outside
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {                                               setMenuOpenFor(null);                                                                                               }
+  };                                                                                                                  
+  // Add event listener when dropdown is open
+  if (menuOpenFor) {
+    document.addEventListener('mousedown', handleClickOutside);                                                           document.addEventListener('touchstart', handleClickOutside);                                                        }                                                                                                                                                                                                                                           // Cleanup
+  return () => {
+    document.removeEventListener('mousedown', handleClickOutside);                                                        document.removeEventListener('touchstart', handleClickOutside);
+  };                                                                                                                  }, [menuOpenFor]);
 
 
   // ✅ Get token headers
@@ -121,10 +140,13 @@ export default function Dashboard() {
 
     try {
       const res = await fetch(`${API_BASE}/posts`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: formData,
-      });
+  method: "POST",
+  headers: {
+    ...getAuthHeaders(),
+
+  },
+  body: formData,
+});
       const data = await res.json();
       if (res.ok) {
         setPosts((prev) => [data, ...prev]);
@@ -165,9 +187,11 @@ const toggleLikesList = (postId) => {
 	
 
   // ✅ Add comment
-  const handleComment = async (postId) => {
+const handleComment = async (postId) => {
   const text = commentInputs[postId];
-  if (!text?.trim()) return;
+  if (!text?.trim() || commentLoading[postId]) return;
+
+  setCommentLoading(prev => ({ ...prev, [postId]: true }));
 
   try {
     const res = await fetch(`${API_BASE}/posts/${postId}/comment`, {
@@ -178,14 +202,15 @@ const toggleLikesList = (postId) => {
       },
       body: JSON.stringify({ text }),
     });
-    const updated = await res.json();
 
+    const updated = await res.json();
+    
     setPosts((prev) =>
       prev.map((p) =>
         p._id === postId
           ? {
               ...p,
-              comments: updated.comments, // keep author intact
+              comments: updated.comments,
             }
           : p
       )
@@ -193,18 +218,17 @@ const toggleLikesList = (postId) => {
     setCommentInputs({ ...commentInputs, [postId]: "" });
   } catch (err) {
     console.error("Comment error:", err);
+  } finally {
+    setCommentLoading(prev => ({ ...prev, [postId]: false }));
   }
 };
-
 
 // --- Edit Post ---
 const handleEdit = (post) => {
   setEditPost(post);
   setEditText(post.content || ""); // safer if content is missing
   setEditImage(null);
-  setPreviewImage(
-    post.image ? `${API_BASE.replace("/api", "")}${post.image}` : null
-  );
+  setPreviewImage( null);
 };
 
 // --- Handle Image File Change ---
@@ -224,8 +248,17 @@ const handleSaveEdit = async () => {
   try {
     const formData = new FormData();
     formData.append("content", editText || "");
-    if (editImage) formData.append("image", editImage);
-
+    
+    
+    
+    if (editImage) {
+      formData.append("image", editImage);
+      
+    } else if (!editPost.image) {
+      formData.append("removeImage", "true");
+      
+    } 
+    
     const res = await axios.put(
       `${API_BASE}/posts/${editPost._id}`,
       formData,
@@ -238,7 +271,7 @@ const handleSaveEdit = async () => {
     );
 
     if (res.data && res.data.post) {
-      // ✅ Update the post list immediately
+      alert(`✅ Post updated successfully!`);
       setPosts((prev) =>
         prev.map((p) => (p._id === editPost._id ? res.data.post : p))
       );
@@ -246,17 +279,12 @@ const handleSaveEdit = async () => {
       setEditText("");
       setPreviewImage(null);
       setEditImage(null);
-      alert("Post updated successfully!");
-    } else {
-      console.error("Invalid server response:", res.data);
-      alert("Server did not return updated post data.");
     }
   } catch (err) {
-    console.error("Error editing post:", err?.response || err);
-    alert("Failed to update post.");
+    alert("❌ Failed to update post. Please try again.");
   }
 };
-	
+
   // ✅ Logout
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -298,9 +326,33 @@ const handleDelete = async (postId) => {
     alert("🔥 Error deleting post: " + err.message);
   }
 };
+
+const getAvatar = (src, username, size = 8) => {
+  const getInitials = (name) => {
+    if (!name) return "U";
+    return name.split(' ').map(word => word.charAt(0).toUpperCase()).join('').slice(0, 2);
+  };
+
+  const sizeClasses = {
+    6: 'w-6 h-6 text-xs',
+    8: 'w-8 h-8 text-sm',
+    12: 'w-12 h-12 text-base',
+    16: 'w-16 h-16 text-lg'
+  };
+
+  if (src) {
+    return <img src={src} alt={username || "User"} className={`rounded-full ${sizeClasses[size]} object-cover`} />;
+  }
+
+  return (
+    <div className={`rounded-full bg-black text-white flex items-center justify-center font-semibold ${sizeClasses[size]}`}>
+      {getInitials(username)}
+    </div>
+  );
+};
   
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 pb-6">
       {/* Header */}
       <div className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-white shadow-sm">
         <h1 className="font-bold text-lg text-purple-600">Infinity</h1>
@@ -311,14 +363,7 @@ const handleDelete = async (postId) => {
               href={`/profile/${user.username}`}
               className="flex items-center space-x-2 hover:opacity-80 transition"
             >
-              <img
-                src={
-                  imageUrl(user.profilePicture) ||
-                  `https://i.pravatar.cc/150?u=${user.username}`
-                }
-                alt={user.username}
-                className="w-8 h-8 rounded-full"
-              />
+              {getAvatar(imageUrl(user.profilePicture), user.username, 8)}
               <span className="text-sm font-medium hover:underline">
                 {user.username}
               </span>
@@ -334,7 +379,7 @@ const handleDelete = async (postId) => {
         )}
       </div>
   
-	  <div className="pt-16">
+	  <div className="pt-14">
 
       {/* Create Post */}
       <form
@@ -380,7 +425,7 @@ const handleDelete = async (postId) => {
 	  </div>
 
       {/* Feed */}
-      <div className="flex-1 p-4 space-y-4">
+      <div className="flex-1 p-4 space-y-1">
         {posts.length === 0 ? (
           <p className="text-center text-gray-500">No posts yet</p>
         ) : (
@@ -395,11 +440,7 @@ const handleDelete = async (postId) => {
     href={`/profile/${post.author?.username}`}
     className="flex items-center space-x-3 hover:opacity-80 transition"
   >
-    <img
-      src={imageUrl(post.author?.profilePicture) || `https://i.pravatar.cc/150?u=${post.author?.username}`}
-      alt={post.author?.username}
-      className="w-10 h-10 rounded-full"
-    />
+    {getAvatar(imageUrl(post.author?.profilePicture), post.author?.username, 8)}
     <span className="font-semibold hover:underline">
       {post.author?.username}
     </span>
@@ -456,11 +497,7 @@ const handleDelete = async (postId) => {
               href={`/profile/${u.username}`}
               className="flex items-center space-x-2 mb-2 hover:opacity-80 transition"
             >
-              <img
-                src={imageUrl(u.profilePicture) || `https://i.pravatar.cc/32?u=${u.username}`}
-                alt={u.username}
-                className="w-7 h-7 rounded-full"
-              />
+              {getAvatar(imageUrl(u.profilePicture), u.username, 6)}
               <span className="text-sm hover:underline">{u.username}</span>
             </a>
           ))
@@ -486,38 +523,41 @@ const handleDelete = async (postId) => {
     </div>
   </div>
 
-  {/* Three-dot menu only on the right */}
-  {post.author?._id === user._id && (
-    <div className="ml-auto relative">
-      <button
-        onClick={() =>
-          setMenuOpenFor(menuOpenFor === post._id ? null : post._id)
-        }
-        className="p-1 hover:bg-gray-200 rounded-full"
-      >
-        <FiMoreHorizontal className="w-5 h-5" />
-      </button>
+		    {/* Three-dot menu only on the right */}
+{post.author?._id === user._id && (
+  <div className="ml-auto relative">
+    <button
+      onClick={() =>
+        setMenuOpenFor(menuOpenFor === post._id ? null : post._id)
+      }
+      className="p-1 hover:bg-gray-200 rounded-full"
+    >
+      <FiMoreHorizontal className="w-5 h-5" />
+    </button>
 
-      {/* Dropdown menu */}
-      {menuOpenFor === post._id && (
-        <div className="absolute right-0 mt-2 w-24 bg-white border rounded shadow-md z-50">
-          <button
-            onClick={() => handleEdit(post)}
-            className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => handleDelete(post._id)}
-            className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100"
-          >
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
-  )}		  
- </div>
+    {/* Dropdown menu */}
+    {menuOpenFor === post._id && (
+      <div 
+        ref={dropdownRef} // Add this ref
+        className="absolute right-0 mt-2 w-24 bg-white border rounded shadow-md z-50"
+      >
+        <button
+          onClick={() => handleEdit(post)}
+          className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => handleDelete(post._id)}
+          className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100"
+        >
+          Delete
+        </button>
+      </div>
+    )}
+  </div>
+)}
+   </div>
 
               {/* Comments */}
 <div className="mt-3 space-y-2">
@@ -526,22 +566,16 @@ const handleDelete = async (postId) => {
       {/* Show top comment only */}
       {post.comments.slice(0, 1).map((c, i) => {
         const username = c.user?.username ?? "user";
-        const avatar =
-          imageUrl(c.user?.profilePicture) ||
-          `https://i.pravatar.cc/150?u=${username}`;
-        const text = c.text ?? c;
-        return (
+        const avatarSrc = imageUrl(c.user?.profilePicture);
+const text = c.text ?? c;
+return (
   <div
     key={i}
     className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50"
   >
     {/* Avatar */}
     <a href={`/profile/${c.user.username}`}>
-      <img
-        src={avatar}
-        alt={username}
-        className="w-7 h-7 rounded-full hover:opacity-80 transition"
-      />
+      {getAvatar(avatarSrc, username, 8)}
     </a>
 
     {/* Username + Comment */}
@@ -589,11 +623,16 @@ const handleDelete = async (postId) => {
       className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
     />
     <button
-      onClick={() => handleComment(post._id)}
-      className="bg-purple-600 text-white px-3 py-1 rounded"
-    >
-      Post
-    </button>
+  onClick={() => handleComment(post._id)}
+  disabled={commentLoading[post._id]}
+  className={`px-3 py-1 rounded ${
+    commentLoading[post._id] 
+      ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+      : "bg-purple-600 text-white hover:bg-purple-700"
+  }`}
+>
+  {commentLoading[post._id] ? "Posting..." : "Post"}
+</button>
   </div>
 </div>
 
@@ -625,9 +664,22 @@ const handleDelete = async (postId) => {
         placeholder="Edit your post..."
       />
 
+      {/* Image Display */}
+      {editPost?.image && !previewImage && (
+        <div className="mb-3">
+          <p className="text-sm text-gray-600 mb-1">Current image:</p>
+          <img
+            src={editPost.image}
+            alt="Current post"
+            className="rounded-lg max-h-40 object-cover w-full"
+          />
+        </div>
+      )}
+
       {/* Preview Image */}
       {previewImage && (
         <div className="relative mb-3">
+          <p className="text-sm text-gray-600 mb-1">New image preview:</p>
           <img
             src={previewImage}
             alt="Preview"
@@ -642,20 +694,66 @@ const handleDelete = async (postId) => {
           >
             <FiX />
           </button>
+          <p className="text-xs text-gray-500 mt-1">
+            This will replace the current image
+          </p>
         </div>
       )}
 
-      {/* Change Image */}
-      <label className="flex items-center space-x-2 text-purple-600 cursor-pointer mb-3 hover:text-purple-800">
-        <FiCamera />
-        <span>{editImage ? "Change Image" : "Add Image"}</span>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-      </label>
+      {/* No Image State - Show when image is removed */}
+      {!editPost?.image && !previewImage && (
+        <div className="mb-3 p-4 border border-dashed border-gray-300 rounded-lg text-center">
+          <FiImage className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">No image in this post</p>
+        </div>
+      )}
+
+      {/* Image Action Buttons */}
+      <div className="space-y-2 mb-3">
+        {/* Change/Add Image Button */}
+        <label className="flex items-center space-x-2 text-purple-600 cursor-pointer hover:text-purple-800 p-2 rounded hover:bg-purple-50">
+          <FiCamera />
+          <span>
+            {previewImage ? "Change New Image" : editPost?.image ? "Change Image" : "Add Image"}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </label>
+
+        {/* Remove Image Button - Only show if there's a current image and no preview */}
+           {editPost?.image && !previewImage && (
+  <button
+    onClick={() => {
+      
+      
+      // Remove the image from the post
+      setEditPost(prev => ({
+        ...prev,
+        image: null
+      }));
+      
+
+      
+      // Also update the main posts array for instant UI feedback
+      setPosts(prev => prev.map(post => 
+        post._id === editPost._id 
+          ? { ...post, image: null } 
+          : post
+      ));
+      setPreviewImage(null);
+      setEditImage(null);
+    }}
+    className="flex items-center space-x-2 text-red-600 cursor-pointer hover:text-red-800 p-2 rounded hover:bg-red-50 w-full text-sm"
+  >
+    <FiTrash2 />
+    <span>Remove Image</span>
+  </button>
+)} 
+		</div>
 
       {/* Save Button */}
       <button
@@ -684,22 +782,16 @@ const handleDelete = async (postId) => {
 
       {activeCommentsPost.comments.map((c, i) => {
         const username = c.user?.username ?? "user";
-        const avatar =
-          imageUrl(c.user?.profilePicture) ||
-          `https://i.pravatar.cc/150?u=${username}`;
-        const text = c.text ?? c;
-        return (
+        const avatarSrc = imageUrl(c.user?.profilePicture);
+const text = c.text ?? c;
+return (
   <div
     key={i}
     className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50"
   >
     {/* Avatar */}
     <a href={`/profile/${c.user.username}`}>
-      <img
-        src={avatar}
-        alt={username}
-        className="w-7 h-7 rounded-full hover:opacity-80 transition"
-      />
+      {getAvatar(avatarSrc, username, 8)}
     </a>
 
     {/* Username + Comment */}
@@ -724,17 +816,20 @@ const handleDelete = async (postId) => {
           ))
         )}
       </div>
-      {/* 🌐 Glassy Bottom Navbar */}
 
-<div className="fixed bottom-0 left-0 w-full z-50 bg-white/40 backdrop-blur-md border-t border-white/20 shadow-lg flex justify-around items-center py-2">
-
+           {/* bottom navbar */}
+<div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 flex justify-around items-center py-1">
   {/* Home */}
   <div
     onClick={() => router.push("/dashboard")}
-    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
+    className={`flex flex-col items-center transition cursor-pointer ${
+      router.pathname === "/dashboard" 
+        ? "text-purple-600" 
+        : "text-gray-700 hover:text-purple-600"
+    }`}
   >
-    <FiHome className="w-6 h-6" />
-    <span className="text-xs mt-1">Home</span>
+    <FiHome className="w-5 h-5" />
+    <span className="text-xs">Home</span>
   </div>
 
   {/* Explore */}
@@ -742,15 +837,15 @@ const handleDelete = async (postId) => {
     onClick={() => alert("Explore feature coming soon!")}
     className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
   >
-    <FiSearch className="w-6 h-6" />
-    <span className="text-xs mt-1">Explore</span>
+    <FiSearch className="w-5 h-5" />
+    <span className="text-xs">Explore</span>
   </div>
 
   {/* Floating Post Button - Centered */}
   <div className="relative -top-1">
     <button
       onClick={() => alert("Post feature coming soon!")}
-      className="bg-purple-600 text-white rounded-full p-3 shadow-lg hover:bg-purple-700 transition"
+      className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
     >
       <FiPlus className="w-6 h-6" />
     </button>
@@ -761,19 +856,22 @@ const handleDelete = async (postId) => {
     onClick={() => alert("Reels feature coming soon!")}
     className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
   >
-    <FiVideo className="w-6 h-6" />
-    <span className="text-xs mt-1">Reels</span>
+    <FiVideo className="w-5 h-5" />
+    <span className="text-xs">Reels</span>
   </div>
 
   {/* Profile */}
-  <Link href={`/profile/${user?.username || ""}`} className="hover:text-purple-600 transition">
-    <div className="flex flex-col items-center">
-      <FiUser className="w-6 h-6" />
-      <span className="text-xs mt-1">Profile</span>
+  <Link href={`/profile/${user?.username || ""}`} className="transition">
+    <div className={`flex flex-col items-center ${
+      router.pathname.includes("/profile") 
+        ? "text-purple-600" 
+        : "text-gray-700 hover:text-purple-600"
+    }`}>
+      <FiUser className="w-5 h-5" />
+      <span className="text-xs">Profile</span>
     </div>
   </Link>
 </div>
-
 
 </div>
   );
