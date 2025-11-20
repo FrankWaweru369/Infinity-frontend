@@ -35,7 +35,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { username } = router.query;
   const postsContext = usePosts();
-  const { posts = [],setPosts, loading:export default function ProfilePage() {
+  const { posts = [],setPosts, loading:
   const [debug, setDebug] = useState("2. Profile page started");
   
   // Check router params
