@@ -31,14 +31,30 @@ const API_BASE = config.apiUrl;
 
 export default function ProfilePage() {
 
+
   const router = useRouter();
-  const { username } = router.query;alert("🟢 Profile page loading...");
-  
-  // Check user and route data
-  alert(`Profile user: ${user ? "Exists" : "NULL"}`);
-  alert(`Profile username from route: ${router.query.username}`);
+  const { username } = router.query;
   const postsContext = usePosts();
-  const { posts = [],setPosts, loading: postsLoading } = postsContext || {};
+  const { posts = [],setPosts, loading:export default function ProfilePage() {
+  const [debug, setDebug] = useState("2. Profile page started");
+  
+  // Check router params
+  if (!router.query.username) {
+    return <div>❌ ERROR: No username in URL</div>;
+  }
+  
+  // Check if profile user exists
+  if (!user) {
+    return <div>❌ ERROR: Profile user not found</div>;
+  }
+  
+  return (
+    <div>
+      <div className="bg-yellow-100 p-2">🟢 {debug}</div>
+      {/* Your normal profile content */}
+    </div>
+  );
+ postsLoading } = postsContext || {};
 
   // profile user (the page being viewed)
   const [user, setUser] = useState(null);
