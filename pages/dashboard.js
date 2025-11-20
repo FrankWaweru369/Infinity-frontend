@@ -26,11 +26,25 @@ const API_BASE = config.apiUrl;
 
 export default function Dashboard() {
 
-alert("🟢 Dashboard loading...");
+  const [debug, setDebug] = useState("1. Dashboard started");
   
-  // Check user data
-  alert(`Dashboard user: ${user ? "Exists" : "NULL"}`);
-  alert(`Dashboard username: ${user?.username || "No username"}`);
+  // Check if user exists
+  if (!user) {
+    return <div>❌ ERROR: User is null</div>;
+  }
+  
+  // Check if user has username
+  if (!user.username) {
+    return <div>❌ ERROR: User has no username</div>;
+  }
+  
+  return (
+    <div>
+      <div className="bg-yellow-100 p-2">🟢 {debug}</div>
+      {/* Your normal dashboard content */}
+    </div>
+  );
+
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [content, setContent] = useState("");
