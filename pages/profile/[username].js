@@ -30,8 +30,13 @@ import axios from "axios";
 const API_BASE = config.apiUrl;
 
 export default function ProfilePage() {
+
   const router = useRouter();
-  const { username } = router.query;
+  const { username } = router.query;alert("🟢 Profile page loading...");
+  
+  // Check user and route data
+  alert(`Profile user: ${user ? "Exists" : "NULL"}`);
+  alert(`Profile username from route: ${router.query.username}`);
   const postsContext = usePosts();
   const { posts = [],setPosts, loading: postsLoading } = postsContext || {};
 
