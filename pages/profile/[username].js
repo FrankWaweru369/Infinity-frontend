@@ -26,12 +26,11 @@ import { User, Info, MapPin, Globe, Phone, Calendar, Edit3, UserCircle } from "l
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import FullImageModal from "../../components/FullImageModal";
 
 const API_BASE = config.apiUrl;
 
 export default function ProfilePage() {
-
-
   const router = useRouter();
   const { username } = router.query;
   const postsContext = usePosts();
@@ -46,9 +45,9 @@ export default function ProfilePage() {
   const [userPosts, setUserPosts] = useState([]);
 
   // UI state
-  const [modalType, setModalType] = useState(null); // "followers" | "following" | null
+  const [modalType, setModalType] = useState(null);
   const [commentInputs, setCommentInputs] = useState({});
-  const [actionLoading, setActionLoading] = useState({}); // per-post action loading
+  const [actionLoading, setActionLoading] = useState({});
   const [menuOpenFor, setMenuOpenFor] = useState(null);
   const [likesListOpenFor, setLikesListOpenFor] = useState(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -69,6 +68,8 @@ const [editImage, setEditImage] = useState(null);
 const [previewImage, setPreviewImage] = useState(null);
 const [activeCommentsPost, setActiveCommentsPost] = useState(null);
 const [commentLoading, setCommentLoading] = useState({});
+const [isMounted, setIsMounted] = useState(false);
+const [fullImage, setFullImage] = useState(null);
 
 const dropdownRef = useRef(null);
 
@@ -120,6 +121,29 @@ useEffect(() => {
 }, [modalType]);
 
 
+
+useEffect(() => {
+    setIsMounted(true);
+
+    return () => {
+      setIsMounted(false); 
+    };
+  }, []);
+
+useEffect(() => {
+  const handleRouteChange = () => {
+    
+    setMenuOpenFor(null);
+    setModalType(null);
+    setLikesListOpenFor(null);
+  };
+
+  router.events.on('routeChangeStart', handleRouteChange);
+
+  return () => {
+    router.events.off('routeChangeStart', handleRouteChange);
+  };
+}, []);
 
   // Get current logged-in user id from localStorage (if available)
   const currentUserId =
@@ -490,25 +514,27 @@ const getAvatar = (src, username, size = 8) => {
 </div>
 
 {/* Profile Header */}
-<div className="relative bg-white shadow-md rounded-lg overflow-visible mt-1">
-  {/* Cover Photo */}
-  <div className="relative w-full h-44 md:h-52 bg-gray-200 rounded-t-lg">
+<div className="relative bg-white shadow-md rounded-lg overflow-visible mt-1 animate-fadeIn">
 
-	{user.coverPhoto ? (
-  <img
-    src={imageUrl(user.coverPhoto)}
-    alt={`${user.username} cover`}
-    className="w-full h-full object-cover rounded-t-lg"
-  />
-) : (
-  <div className="w-full h-full bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-800 rounded-t-lg flex items-center justify-center">
-    <span className="text-white text-xl font-bold opacity-80">No cover photo yet</span>
-  </div>
-)}
+  {/* Cover Photo */}
+  <div className="relative w-full h-44 md:h-52 bg-gray-200 rounded-t-lg overflow-hidden">
+
+    {user.coverPhoto ? (
+      <img
+        src={imageUrl(user.coverPhoto)}
+        alt={`${user.username} cover`}
+        onClick={() => window.open(imageUrl(user.coverPhoto), "_blank")}
+        className="w-full h-full object-cover object-center rounded-t-lg cursor-pointer transform transition duration-500 hover:scale-105"
+      />
+    ) : (
+      <div className="w-full h-full bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-800 rounded-t-lg flex items-center justify-center">
+        <span className="text-white text-xl font-bold opacity-80">No cover photo yet</span>
+      </div>
+    )}
 
     {/* Edit Cover Photo Icon */}
     {currentUserId === user._id && (
-      <label className="absolute top-3 right-3 bg-black bg-opacity-50 hover:bg-opacity-70 p-2 rounded-full cursor-pointer">
+      <label className="absolute top-3 right-3 bg-black bg-opacity-50 hover:bg-opacity-70 p-2 rounded-full cursor-pointer transition">
         <FiCamera className="text-white w-5 h-5" />
         <input
           type="file"
@@ -521,15 +547,21 @@ const getAvatar = (src, username, size = 8) => {
   </div>
 
   {/* Profile Info Section */}
-  <div className="px-6 pb-6 pt-20 relative">
-    {/* Profile Info Row (Picture + Username + Counts) */}
+  <div className="px-6 pb-4 pt-14 relative">
+
+    {/* Profile Row */}
     <div className="flex items-center space-x-6 md:space-x-8">
+
       {/* Profile Picture */}
-      <div className="relative -mt-16">
+      <div
+        className="relative -mt-16 cursor-pointer transform transition hover:scale-105"
+        onClick={() => window.open(imageUrl(user.profilePicture), "_blank")}
+      >
         {getAvatar(imageUrl(user.profilePicture), user.username, 16)}
-        {/* Edit Profile Picture Icon */}
+
+        {/* Edit Icon */}
         {currentUserId === user._id && (
-          <label className="absolute bottom-1 right-1 bg-black bg-opacity-50 hover:bg-opacity-70 p-1.5 rounded-full cursor-pointer">
+          <label className="absolute bottom-1 right-1 bg-black bg-opacity-50 hover:bg-opacity-70 p-1.5 rounded-full cursor-pointer transition">
             <FiCamera className="text-white w-4 h-4" />
             <input
               type="file"
@@ -541,9 +573,10 @@ const getAvatar = (src, username, size = 8) => {
         )}
       </div>
 
-      {/* Username + Follow Counts */}
+      {/* Username + Stats */}
       <div className="mt-6 md:mt-8">
         <h1 className="text-xl md:text-2xl font-bold">{user.username}</h1>
+
         <div className="flex space-x-6 text-gray-600 mt-1 md:mt-2">
           <button onClick={() => setModalType("followers")} className="hover:underline">
             {user.followers?.length || 0} followers
@@ -565,7 +598,7 @@ const getAvatar = (src, username, size = 8) => {
                 (f) => f._id === currentUserId || f === currentUserId
               );
 
-              // Optimistic UI update
+              // Optimistic UI
               setUser((prev) => {
                 const newFollowers = isFollowing
                   ? prev.followers.filter((f) => f._id !== currentUserId && f !== currentUserId)
@@ -573,14 +606,15 @@ const getAvatar = (src, username, size = 8) => {
                 return { ...prev, followers: newFollowers };
               });
 
-              // Call backend
+              // Backend Call
               const url = `${API_BASE}/users/${user._id}/${isFollowing ? "unfollow" : "follow"}`;
               await axios.post(url, {}, { headers: getAuthHeaders() });
+
             } catch (err) {
               console.error("Follow/unfollow error:", err);
             }
           }}
-          className={`w-full text-white font-semibold py-2 rounded-lg shadow ${
+          className={`w-full text-white font-semibold py-2 rounded-lg shadow transition ${
             user.followers?.some((f) => f._id === currentUserId || f === currentUserId)
               ? "bg-gray-400 hover:bg-gray-500"
               : "bg-purple-600 hover:bg-purple-700"
@@ -593,9 +627,7 @@ const getAvatar = (src, username, size = 8) => {
       </div>
     )}
   </div>
-</div>  
-
-	
+</div>	
 
 {/* About Section */}
 <div className="bg-white p-6 shadow-md rounded-2xl mt-1 border border-gray-100">
@@ -898,7 +930,8 @@ const getAvatar = (src, username, size = 8) => {
                 {/* Image */}
                 {post.image && (
                   <div className="rounded-md overflow-hidden mb-2">
-                    <img src={imageUrl(post.image)} alt="Post" className="w-full object-cover" />
+                    <img src={imageUrl(post.image)} alt="Post" className="rounded-md w-full object-cover mb-2 cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
+			onClick={() => setFullImage(post.image)} />
                   </div>
                 )}
 
@@ -1328,14 +1361,22 @@ const getAvatar = (src, username, size = 8) => {
     </div>
   </div>
 )}
+
+{fullImage && (
+  <FullImageModal
+    imageUrl={fullImage}
+    onClose={() => setFullImage(null)}
+  />
+)}
+
   {/* bottom navbar */}
 <div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 flex justify-around items-center py-1">
   {/* Home */}
   <div
     onClick={() => router.push("/dashboard")}
     className={`flex flex-col items-center transition cursor-pointer ${
-      router.pathname === "/dashboard" 
-        ? "text-purple-600" 
+      router.pathname === "/dashboard"
+        ? "text-purple-600"
         : "text-gray-700 hover:text-purple-600"
     }`}
   >
@@ -1345,8 +1386,12 @@ const getAvatar = (src, username, size = 8) => {
 
   {/* Explore */}
   <div
-    onClick={() => alert("Explore feature coming soon!")}
-    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
+    onClick={() => router.push("/explore")}
+    className={`flex flex-col items-center transition cursor-pointer ${
+      router.pathname === "/explore"
+        ? "text-purple-600"
+        : "text-gray-700 hover:text-purple-600"
+    }`}
   >
     <FiSearch className="w-5 h-5" />
     <span className="text-xs">Explore</span>
@@ -1364,8 +1409,12 @@ const getAvatar = (src, username, size = 8) => {
 
   {/* Reels */}
   <div
-    onClick={() => alert("Reels feature coming soon!")}
-    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
+    onClick={() => router.push("/reels")}
+    className={`flex flex-col items-center transition cursor-pointer ${
+      router.pathname === "/reels"
+        ? "text-purple-600"
+        : "text-gray-700 hover:text-purple-600"
+    }`}
   >
     <FiVideo className="w-5 h-5" />
     <span className="text-xs">Reels</span>
@@ -1374,8 +1423,8 @@ const getAvatar = (src, username, size = 8) => {
   {/* Profile */}
   <Link href={`/profile/${user?.username || ""}`} className="transition">
     <div className={`flex flex-col items-center ${
-      router.pathname.includes("/profile") 
-        ? "text-purple-600" 
+      router.pathname.includes("/profile")
+        ? "text-purple-600"
         : "text-gray-700 hover:text-purple-600"
     }`}>
       <FiUser className="w-5 h-5" />

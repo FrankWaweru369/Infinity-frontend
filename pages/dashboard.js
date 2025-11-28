@@ -20,6 +20,7 @@ import {
 import { FaHeart } from "react-icons/fa";
 import axios from "axios";
 import Link from "next/link";
+import FullImageModal from "../components/FullImageModal";
 
 
 const API_BASE = config.apiUrl;
@@ -43,6 +44,7 @@ export default function Dashboard() {
   const [previewImage, setPreviewImage] = useState(null);
   const [activeCommentsPost, setActiveCommentsPost] = useState(null);
   const [commentLoading, setCommentLoading] = useState({});
+  const [fullImage, setFullImage] = useState(null);
 
 const currentPath = router.pathname;
 
@@ -453,13 +455,14 @@ const getAvatar = (src, username, size = 8) => {
 
               {/* Content */}
               <p className="mb-2 text-sm">{post.content}</p>
-              {post.image && (
-                <img
-                  src={post.image}
-                  alt="Post"
-                  className="rounded-md w-full object-cover mb-2"
-                />
-              )}
+                {post.image && (
+  <img
+    src={post.image}
+    alt="Post"
+    className="rounded-md w-full object-cover mb-2 cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
+    onClick={() => setFullImage(post.image)}
+  />
+)}
 
         {/* Actions */}
 <div className="flex items-center mt-2 text-gray-600 w-full relative">
@@ -470,11 +473,11 @@ const getAvatar = (src, username, size = 8) => {
       onClick={() => handleLike(post)}
       className="flex items-center space-x-1"
     >
-      {post.likes?.some((u) => u._id === user._id) ? (
-        <FaHeart className="w-5 h-5 text-red-500" />
-      ) : (
-        <FiHeart className="w-5 h-5" />
-      )}
+      {user?._id && post.likes?.some((u) => u._id === user._id) ? (
+  <FaHeart className="w-5 h-5 text-red-500" />
+) : (
+  <FiHeart className="w-5 h-5" />
+)}
       <span>{post.likes?.length || 0}</span>
     </button>
 
@@ -767,6 +770,13 @@ return (
   </div>
 )}
 
+{fullImage && (
+  <FullImageModal
+    imageUrl={fullImage}
+    onClose={() => setFullImage(null)}
+  />
+)}
+
 		  {/* Comments Modal */}
 {activeCommentsPost && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
@@ -834,13 +844,12 @@ return (
   </div>
 
   {/* Explore */}
-  <div
-    onClick={() => alert("Explore feature coming soon!")}
-    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
-  >
+<Link href="/explore">
+  <div className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer">
     <FiSearch className="w-5 h-5" />
     <span className="text-xs">Explore</span>
   </div>
+</Link>
 
   {/* Floating Post Button - Centered */}
   <div className="relative -top-1">
@@ -853,14 +862,12 @@ return (
   </div>
 
   {/* Reels */}
-  <div
-    onClick={() => alert("Reels feature coming soon!")}
-    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer"
-  >
+<Link href="/reels">
+  <div className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer">
     <FiVideo className="w-5 h-5" />
     <span className="text-xs">Reels</span>
   </div>
-
+</Link>
   {/* Profile */}
   <Link href={`/profile/${user?.username || ""}`} className="transition">
     <div className={`flex flex-col items-center ${

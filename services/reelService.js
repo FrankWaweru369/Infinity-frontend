@@ -21,6 +21,21 @@ export const reelService = {
     }
   },
 
+
+getReelsByUser: async (userId) => {
+  try {
+    const response = await axios.get(`${API_BASE}/reels/user/${userId}`);
+    return response.data;
+  } catch (error) {
+    // If endpoint doesn't exist, fall back to filtering all reels
+    const allReels = await axios.get(`${API_BASE}/reels?limit=100`);
+    const userReels = allReels.data.reels.filter(reel => 
+      reel.userId === userId || reel.user?._id === userId
+    );
+    return { reels: userReels };
+  }
+},
+
   // Get single reel
   getReel: async (id) => {
     try {
@@ -47,16 +62,16 @@ export const reelService = {
   },
 
   // Like/unlike reel
-  likeReel: async (reelId) => {
-    try {
-      const response = await axios.put(`${API_BASE}/reels/${reelId}/like`, {}, {
-        headers: getAuthHeaders(),
-      });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
+likeReel: async (reelId) => {
+  try {
+    const response = await axios.put(`${API_BASE}/reels/${reelId}/like`, {}, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+},
 
   // Add comment
   addComment: async (reelId, text) => {
@@ -71,27 +86,77 @@ export const reelService = {
     }
   },
 
-  // Share reel
-  shareReel: async (reelId) => {
-    try {
-      const response = await axios.put(`${API_BASE}/reels/${reelId}/share`, {}, {
-        headers: getAuthHeaders(),
-      });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
+// Share reel
+shareReel: async (reelId) => {
+  try {
+    const response = await axios.post(`${API_BASE}/reels/${reelId}/share`, {}, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+}, 
 
-  // Delete reel
-  deleteReel: async (reelId) => {
-    try {
-      const response = await axios.delete(`${API_BASE}/reels/${reelId}`, {
-        headers: getAuthHeaders(),
-      });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
+ // In reelService.js - check the delete function
+deleteReel: async (reelId) => {
+  try {
+    const token = localStorage.getItem('token');
+    
+    const response = await axios.delete(`${API_BASE}/reels/${reelId}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+}, 
+
+
+
+getFollowingReels: async (page = 1, limit = 10) => {
+  try {
+    const response = await axios.get(`${API_BASE}/reels/following?page=${page}&limit=${limit}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+},
+
+
+
+checkFollowStatus: async (userId) => {
+  try {
+    const response = await axios.get(`${API_BASE}/users/follow/${userId}/status`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+},
+
+followUser: async (userId) => {
+  try {
+    const response = await axios.post(`${API_BASE}/users/follow/${userId}/follow`, {}, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+},
+
+unfollowUser: async (userId) => {
+  try {
+    const response = await axios.post(`${API_BASE}/users/follow/${userId}/unfollow`, {}, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+},
 };

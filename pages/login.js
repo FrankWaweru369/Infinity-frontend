@@ -7,6 +7,7 @@ export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -58,15 +59,24 @@ export default function Login() {
           required
         />
 
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          value={form.password}
-          onChange={handleChange}
-          className="w-full border rounded p-2"
-          required
-        />
+<div className="relative w-full">
+  <input
+    type={showPassword ? "text" : "password"}
+    name="password"
+    placeholder="Password"
+    value={form.password}
+    onChange={handleChange}
+    className="w-full border rounded p-2 pr-12"
+    required
+  />
+
+  <span
+    onClick={() => setShowPassword(!showPassword)}
+    className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-sm text-gray-600 select-none"
+  >
+    {showPassword ? "Hide" : "Show"}
+  </span>
+</div>
 
         <button
           type="submit"
@@ -75,6 +85,15 @@ export default function Login() {
         >
           {loading ? "Logging in..." : "Login"}
         </button>
+	  <p className="text-center text-sm text-gray-600">
+  Don't have an account?{" "}
+  <span
+    onClick={() => router.push("/register")}
+    className="text-purple-600 cursor-pointer font-semibold hover:underline"
+  >
+    Register
+  </span>
+</p>
       </form>
     </div>
   );
