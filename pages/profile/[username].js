@@ -70,8 +70,21 @@ const [activeCommentsPost, setActiveCommentsPost] = useState(null);
 const [commentLoading, setCommentLoading] = useState({});
 const [isMounted, setIsMounted] = useState(false);
 const [fullImage, setFullImage] = useState(null);
+const [likedPosts, setLikedPosts] = useState({});
 
 const dropdownRef = useRef(null);
+
+useEffect(() => {
+  try {
+    const token = localStorage.getItem("token");
+    if (token) {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setCurrentUserId(payload.id); // correct user id
+    }
+  } catch (err) {
+    console.error("Token decode error:", err);
+  }
+}, []);
 
 // Close dropdown when clicking outside
 useEffect(() => {
@@ -195,17 +208,51 @@ useEffect(() => {
 
 
   // Filter posts from PostsContext for this user
-  useEffect(() => {
-    if (!username) return;
-    if (!posts || posts.length === 0) {
-      setUserPosts([]);
-      return;
+useEffect(() => {
+  if (!username) return;
+  if (!posts || posts.length === 0) {
+    setUserPosts([]);
+    return;
+  }
+  
+  const filtered = posts.filter((p) => p.author?.username === username);
+  // sort newest to oldest (createdAt descending) if createdAt present
+  filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  setUserPosts(filtered);
+  
+  // ✅ INITIALIZE likedPosts state
+  const token = localStorage.getItem("token");
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      const currentUserId = payload.id;
+      
+      const likedPostsObj = {};
+      filtered.forEach(post => {
+        let userLiked = false;
+        
+        if (post.likes && Array.isArray(post.likes)) {
+          userLiked = post.likes.some(like => {
+            if (typeof like === 'string') {
+              return like === currentUserId;
+            } else if (like._id) {
+              return like._id === currentUserId;
+            } else if (like.user?._id) {
+              return like.user._id === currentUserId;
+            }
+            return false;
+          });
+        }
+        
+        likedPostsObj[post._id] = userLiked;
+      });
+      
+      setLikedPosts(likedPostsObj);
+    } catch (error) {
+      console.error("Error initializing likedPosts:", error);
     }
-    const filtered = posts.filter((p) => p.author?.username === username);
-    // sort newest to oldest (createdAt descending) if createdAt present
-    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    setUserPosts(filtered);
-  }, [username, posts]);
+  }
+}, [username, posts]);
 
 
 
@@ -225,28 +272,196 @@ useEffect(() => {
   }
 }, [user]);
 
-  // Like/unlike a post
-  const handleLike = async (post) => {
-    if (!post || !post._id) return;
-    setActionLoading((s) => ({ ...s, [post._id]: true }));
-    try {
-      const res = await fetch(`${API_BASE}/posts/${post._id}/like`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-      });
-      const updated = await res.json();
-      
-      setUserPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
-      
-      if (postsContext && typeof postsContext.setPosts === "function") {
-        postsContext.setPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
-      }
-    } catch (err) {
-      console.error("Like error:", err);
-    } finally {
-      setActionLoading((s) => ({ ...s, [post._id]: false }));
-    }
+useEffect(() => {
+  if (!currentUserId) return;                                                                                                                                                                                                                 const start = Date.now();                                                                                                                                                                                                                   return () => {
+    const duration = Math.floor((Date.now() - start) / 1000);
+                                                                                                                          axios.post(`${API_BASE}/analytics/visit`, {
+      userId: currentUserId,                                                                                                page: window.location.pathname,
+      duration,
+    }).catch(err => console.error("Analytics error:", err));
   };
+}, [currentUserId]);
+
+
+
+const getCurrentUserId = () => {
+  if (typeof window === "undefined") return null;
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.id;
+  } catch (error) {
+    console.error("Error getting user ID:", error);
+    return null;
+  }
+};
+  // Like/unlike a post
+const handleLike = async (post) => {
+  if (!post || !post._id) return;
+  
+  // Get current user ID
+  const token = localStorage.getItem("token");
+  let currentUserId = null;
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      currentUserId = payload.id;
+    } catch (error) {
+      console.error("Error getting user ID:", error);
+    }
+  }
+  
+  if (!currentUserId) {
+    router.push('/login');
+    return;
+  }
+  
+  // Store current state for optimistic update
+  const wasLiked = likedPosts[post._id];
+  
+  // Optimistic update: Immediately change UI
+  setLikedPosts(prev => ({
+    ...prev,
+    [post._id]: !wasLiked
+  }));
+  
+  // Optimistically update likes count in userPosts
+  setUserPosts(prev => prev.map(p => 
+    p._id === post._id 
+      ? { 
+          ...p, 
+          likes: wasLiked 
+            ? p.likes?.filter(like => {
+                // Handle different like structures
+                if (typeof like === 'string') {
+                  return like !== currentUserId;
+                } else if (like._id) {
+                  return like._id !== currentUserId;
+                } else if (like.user?._id) {
+                  return like.user._id !== currentUserId;
+                }
+                return true;
+              })
+            : [...(p.likes || []), currentUserId]
+        } 
+      : p
+  ));
+  
+  // Also update global posts context if available
+  if (postsContext && typeof postsContext.setPosts === "function") {
+    postsContext.setPosts(prev => prev.map(p => 
+      p._id === post._id 
+        ? { 
+            ...p, 
+            likes: wasLiked 
+              ? p.likes?.filter(like => {
+                  if (typeof like === 'string') {
+                    return like !== currentUserId;
+                  } else if (like._id) {
+                    return like._id !== currentUserId;
+                  } else if (like.user?._id) {
+                    return like.user._id !== currentUserId;
+                  }
+                  return true;
+                })
+              : [...(p.likes || []), currentUserId]
+          } 
+        : p
+    ));
+  }
+  
+  setActionLoading((s) => ({ ...s, [post._id]: true }));
+  
+  try {
+    const res = await fetch(`${API_BASE}/posts/${post._id}/like`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    });
+    
+    const updated = await res.json();
+
+    // Update with server response
+    setUserPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
+    
+    if (postsContext && typeof postsContext.setPosts === "function") {
+      postsContext.setPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
+    }
+    
+    // Update likedPosts with accurate state from server
+    const userLiked = updated.likes?.some(like => {
+      if (typeof like === 'string') {
+        return like === currentUserId;
+      } else if (like._id) {
+        return like._id === currentUserId;
+      } else if (like.user?._id) {
+        return like.user._id === currentUserId;
+      }
+      return false;
+    });
+    
+    setLikedPosts(prev => ({
+      ...prev,
+      [post._id]: userLiked
+    }));
+    
+  } catch (err) {
+    console.error("Like error:", err);
+    
+    // Revert optimistic update on error
+    setLikedPosts(prev => ({
+      ...prev,
+      [post._id]: wasLiked
+    }));
+    
+    // Revert posts states
+    setUserPosts(prev => prev.map(p => 
+      p._id === post._id 
+        ? { 
+            ...p, 
+            likes: wasLiked 
+              ? [...(p.likes || []), currentUserId]
+              : p.likes?.filter(like => {
+                  if (typeof like === 'string') {
+                    return like !== currentUserId;
+                  } else if (like._id) {
+                    return like._id !== currentUserId;
+                  } else if (like.user?._id) {
+                    return like.user._id !== currentUserId;
+                  }
+                  return true;
+                })
+          } 
+        : p
+    ));
+    
+    if (postsContext && typeof postsContext.setPosts === "function") {
+      postsContext.setPosts(prev => prev.map(p => 
+        p._id === post._id 
+          ? { 
+              ...p, 
+              likes: wasLiked 
+                ? [...(p.likes || []), currentUserId]
+                : p.likes?.filter(like => {
+                    if (typeof like === 'string') {
+                      return like !== currentUserId;
+                    } else if (like._id) {
+                      return like._id !== currentUserId;
+                    } else if (like.user?._id) {
+                      return like.user._id !== currentUserId;
+                    }
+                    return true;
+                  })
+            } 
+          : p
+      ));
+    }
+    
+  } finally {
+    setActionLoading((s) => ({ ...s, [post._id]: false }));
+  }
+};
 
   const toggleLikesList = (postId) => {
     setLikesListOpenFor((prev) => (prev === postId ? null : postId));
@@ -516,116 +731,183 @@ const getAvatar = (src, username, size = 8) => {
 {/* Profile Header */}
 <div className="relative bg-white shadow-md rounded-lg overflow-visible mt-1 animate-fadeIn">
 
-  {/* Cover Photo */}
-  <div className="relative w-full h-44 md:h-52 bg-gray-200 rounded-t-lg overflow-hidden">
-
-    {user.coverPhoto ? (
-      <img
-        src={imageUrl(user.coverPhoto)}
-        alt={`${user.username} cover`}
-        onClick={() => window.open(imageUrl(user.coverPhoto), "_blank")}
-        className="w-full h-full object-cover object-center rounded-t-lg cursor-pointer transform transition duration-500 hover:scale-105"
-      />
-    ) : (
-      <div className="w-full h-full bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-800 rounded-t-lg flex items-center justify-center">
-        <span className="text-white text-xl font-bold opacity-80">No cover photo yet</span>
-      </div>
-    )}
-
-    {/* Edit Cover Photo Icon */}
-    {currentUserId === user._id && (
-      <label className="absolute top-3 right-3 bg-black bg-opacity-50 hover:bg-opacity-70 p-2 rounded-full cursor-pointer transition">
-        <FiCamera className="text-white w-5 h-5" />
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleCoverPhotoChange}
+  {/* Main Container with Cover Photo Background */}
+  <div className="relative rounded-t-lg overflow-hidden">
+    
+    {/* Clickable Cover Photo Background Container */}
+    <div 
+      className="absolute inset-0 z-0"
+      onClick={() => {
+        if (user.coverPhoto) {
+          window.open(imageUrl(user.coverPhoto), "_blank");
+        }
+      }}
+    >
+      {user.coverPhoto ? (
+        <img
+          src={imageUrl(user.coverPhoto)}
+          alt={`${user.username} cover`}
+          className={`w-full h-full object-cover object-center ${user.coverPhoto ? 'cursor-pointer' : ''}`}
         />
-      </label>
-    )}
-  </div>
-
-  {/* Profile Info Section */}
-  <div className="px-6 pb-4 pt-14 relative">
-
-    {/* Profile Row */}
-    <div className="flex items-center space-x-6 md:space-x-8">
-
-      {/* Profile Picture */}
-      <div
-        className="relative -mt-16 cursor-pointer transform transition hover:scale-105"
-        onClick={() => window.open(imageUrl(user.profilePicture), "_blank")}
-      >
-        {getAvatar(imageUrl(user.profilePicture), user.username, 16)}
-
-        {/* Edit Icon */}
-        {currentUserId === user._id && (
-          <label className="absolute bottom-1 right-1 bg-black bg-opacity-50 hover:bg-opacity-70 p-1.5 rounded-full cursor-pointer transition">
-            <FiCamera className="text-white w-4 h-4" />
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleProfilePictureChange}
-            />
-          </label>
-        )}
-      </div>
-
-      {/* Username + Stats */}
-      <div className="mt-6 md:mt-8">
-        <h1 className="text-xl md:text-2xl font-bold">{user.username}</h1>
-
-        <div className="flex space-x-6 text-gray-600 mt-1 md:mt-2">
-          <button onClick={() => setModalType("followers")} className="hover:underline">
-            {user.followers?.length || 0} followers
-          </button>
-          <button onClick={() => setModalType("following")} className="hover:underline">
-            {user.following?.length || 0} following
-          </button>
-        </div>
-      </div>
+      ) : (
+        <div className="w-full h-full bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-800"></div>
+      )}
     </div>
 
-    {/* Follow/Unfollow Button */}
-    {currentUserId !== user._id && (
-      <div className="mt-6">
-        <button
-          onClick={async () => {
-            try {
-              const isFollowing = user.followers?.some(
-                (f) => f._id === currentUserId || f === currentUserId
-              );
+    {/* Cover Photo Top Section - This sits above but shouldn't block clicks to background */}
+    <div className="relative h-44 md:h-52 z-10 pointer-events-none">
+      {!user.coverPhoto && (
+        <div className="w-full h-full flex items-center justify-center pointer-events-none">
+          <span className="text-white text-xl font-bold opacity-80">No cover photo yet</span>
+        </div>
+      )}
 
-              // Optimistic UI
-              setUser((prev) => {
-                const newFollowers = isFollowing
-                  ? prev.followers.filter((f) => f._id !== currentUserId && f !== currentUserId)
-                  : [...prev.followers, { _id: currentUserId }];
-                return { ...prev, followers: newFollowers };
-              });
-
-              // Backend Call
-              const url = `${API_BASE}/users/${user._id}/${isFollowing ? "unfollow" : "follow"}`;
-              await axios.post(url, {}, { headers: getAuthHeaders() });
-
-            } catch (err) {
-              console.error("Follow/unfollow error:", err);
-            }
-          }}
-          className={`w-full text-white font-semibold py-2 rounded-lg shadow transition ${
-            user.followers?.some((f) => f._id === currentUserId || f === currentUserId)
-              ? "bg-gray-400 hover:bg-gray-500"
-              : "bg-purple-600 hover:bg-purple-700"
-          }`}
+      {/* Edit Cover Photo Icon - Needs pointer-events */}
+      {currentUserId === user._id && (
+        <label 
+          className="absolute top-3 right-3 bg-black bg-opacity-50 hover:bg-opacity-70 p-2 rounded-full cursor-pointer transition z-20 pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
         >
-          {user.followers?.some((f) => f._id === currentUserId || f === currentUserId)
-            ? "Unfollow"
-            : "Follow"}
-        </button>
+          <FiCamera className="text-white w-5 h-5" />
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                handleCoverPhotoChange(e);
+              }
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.target.value = '';
+            }}
+          />
+        </label>
+      )}
+    </div>
+
+    {/* Profile Info Section - Darker semi-transparent with blur for better contrast */}
+    <div className="px-6 pb-4 pt-14 relative bg-black/30 backdrop-blur-md z-10 rounded-b-lg">
+
+      {/* Profile Row */}
+      <div className="flex items-center space-x-6 md:space-x-8">
+
+        {/* Profile Picture Container */}
+        <div className="relative -mt-16 z-20">
+          {/* Profile Picture Clickable Area - Only if image exists */}
+          {user.profilePicture ? (
+            <div
+              className="cursor-pointer transform transition hover:scale-105"
+              onClick={() => window.open(imageUrl(user.profilePicture), "_blank")}
+            >
+              {getAvatar(imageUrl(user.profilePicture), user.username, 16)}
+            </div>
+          ) : (
+            <div>
+              {getAvatar(imageUrl(user.profilePicture), user.username, 16)}
+            </div>
+          )}
+
+          {/* Edit Icon - Moved outside with click handler */}
+          {currentUserId === user._id && (
+            <label 
+              className="absolute -bottom-1 -right-1 bg-black bg-opacity-70 hover:bg-opacity-90 p-1.5 rounded-full cursor-pointer transition border-2 border-white shadow-lg z-30"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <FiCamera className="text-white w-4 h-4" />
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleProfilePictureChange(e);
+                  }
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          )}
+        </div>
+
+        {/* Username + Stats - Clean without backgrounds */}
+        <div className="mt-4 md:mt-6">
+          <h1 className="text-xl md:text-2xl font-bold text-white drop-shadow-lg">
+            {user.username}
+          </h1>
+
+          <div className="flex space-x-6 mt-1 md:mt-2">
+            <button 
+              onClick={() => {
+                if (user.followers?.length > 0) {
+                  setModalType("followers");
+                }
+              }}
+              className={`text-white font-medium drop-shadow-md transition ${
+                user.followers?.length > 0 ? "hover:underline" : "opacity-70 cursor-default"
+              }`}
+            >
+              {user.followers?.length || 0} followers
+            </button>
+            <button 
+              onClick={() => {
+                if (user.following?.length > 0) {
+                  setModalType("following");
+                }
+              }}
+              className={`text-white font-medium drop-shadow-md transition ${
+                user.following?.length > 0 ? "hover:underline" : "opacity-70 cursor-default"
+              }`}
+            >
+              {user.following?.length || 0} following
+            </button>
+          </div>
+        </div>
       </div>
-    )}
+
+      {/* Follow/Unfollow Button */}
+      {currentUserId !== user._id && (
+        <div className="mt-6">
+          <button
+            onClick={async () => {
+              try {
+                const isFollowing = user.followers?.some(
+                  (f) => f._id === currentUserId || f === currentUserId
+                );
+
+                // Optimistic UI
+                setUser((prev) => {
+                  const newFollowers = isFollowing
+                    ? prev.followers.filter((f) => f._id !== currentUserId && f !== currentUserId)
+                    : [...prev.followers, { _id: currentUserId }];
+                  return { ...prev, followers: newFollowers };
+                });
+
+                // Backend Call
+                const url = `${API_BASE}/users/${user._id}/${isFollowing ? "unfollow" : "follow"}`;
+                await axios.post(url, {}, { headers: getAuthHeaders() });
+
+              } catch (err) {
+                console.error("Follow/unfollow error:", err);
+              }
+            }}
+            className={`w-full text-white font-semibold py-2 rounded-lg shadow-lg transition ${
+              user.followers?.some((f) => f._id === currentUserId || f === currentUserId)
+                ? "bg-gray-700/90 hover:bg-gray-800 backdrop-blur-sm"
+                : "bg-purple-700/90 hover:bg-purple-800 backdrop-blur-sm"
+            }`}
+          >
+            {user.followers?.some((f) => f._id === currentUserId || f === currentUserId)
+              ? "Unfollow"
+              : "Follow"}
+          </button>
+        </div>
+      )}
+    </div>
   </div>
 </div>	
 
@@ -937,19 +1219,19 @@ const getAvatar = (src, username, size = 8) => {
 
                 {/* Actions */}
                 <div className="flex items-center w-full mt-3 text-gray-600 relative">
-                  {/* Like Button */}
-                  <button
-                    onClick={() => handleLike(post)}
-                    disabled={!!actionLoading[postId]}
-                    className="flex items-center space-x-1"
-                  >
-                    {likedByUser ? (
-                      <FaHeart className="w-5 h-5 text-red-500" />
-                    ) : (
-                      <FiHeart className="w-5 h-5" />
-                    )}
-                    <span>{post.likes?.length || 0}</span>
-                  </button>
+                  {/* Like Button in profile page posts */}
+<button
+  onClick={() => handleLike(post)}
+  disabled={actionLoading[post._id]}
+  className="flex flex-col items-center"
+>
+  {likedPosts[post._id] ? (
+    <FaHeart className="w-5 h-5 text-red-500" />
+  ) : (
+    <FiHeart className="w-5 h-5 text-gray-500 hover:text-red-500" />
+  )}
+  <span className="text-xs mt-1">{post.likes?.length || 0}</span>
+</button>
 
                   {/* clickable count opens list */}
                   <button
@@ -959,36 +1241,57 @@ const getAvatar = (src, username, size = 8) => {
                     {post.likes?.length ? "View likers" : "Be first to like"}
                   </button>
 
-                  {/* Likes list dropdown/modal */}
+                 {/* Likes list dropdown/modal - Simplified with gray background */}
 {likesListOpenFor === post._id && (
-  <div className="absolute left-0 mt-10 bg-white border rounded shadow p-2 w-56 z-50">
-    <div className="text-sm font-semibold mb-2">Liked by</div>
-    <div className="max-h-48 overflow-y-auto">
+  <div className="absolute left-4 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-3 w-60 z-50">
+    {/* Header with subtle gray background */}
+    <div className="text-sm font-semibold mb-3 pb-2 border-b border-gray-200 text-gray-800 bg-gray-50 px-2 py-1 rounded-t">
+      Liked by ({post.likes?.length || 0})
+    </div>
+    
+    {/* List with alternating background for better separation */}
+    <div className="max-h-48 overflow-y-auto bg-gray-50/30 rounded">
       {post.likes && post.likes.length ? (
-        post.likes.map((u) => (
+        post.likes.map((u, index) => (
           <a
             key={u._id}
             href={`/profile/${u.username}`}
-            className="flex items-center space-x-2 p-2 bg-gray-50 border border-gray-100 rounded-md hover:opacity-80 transition"
+            className={`flex items-center space-x-3 p-2 transition ${
+              index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+            } ${
+              index !== post.likes.length - 1 ? 'border-b border-gray-100' : ''
+            } hover:bg-purple-50`}
           >
-            {getAvatar(imageUrl(u.profilePicture), u.username, 6)}
-            <span className="text-sm hover:underline">{u.username}</span>
+            {/* Avatar with border */}
+            <div className="w-8 h-8 rounded-full border-2 border-purple-200 overflow-hidden bg-white">
+              {getAvatar(imageUrl(u.profilePicture), u.username, 8)}
+            </div>
+            
+            <span className="text-sm font-medium text-gray-700">{u.username}</span>
           </a>
         ))
       ) : (
-        <div className="text-xs text-gray-400">No likes yet</div>
+        <div className="py-6 text-center bg-white rounded">
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+            <FiHeart className="w-5 h-5 text-gray-400" />
+          </div>
+          <p className="text-sm text-gray-500">No likes yet</p>
+          <p className="text-xs text-gray-400 mt-1">Be the first to like</p>
+        </div>
       )}
     </div>
-    <div className="text-right mt-2">
+    
+    {/* Footer with subtle gray background */}
+    <div className="mt-3 pt-2 border-t border-gray-200 text-right bg-gray-50/50 px-2 py-1 rounded-b">
       <button
         onClick={() => setLikesListOpenFor(null)}
-        className="text-xs text-gray-500"
+        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
       >
         Close
       </button>
     </div>
   </div>
-)}
+)} 
 
                   {/* Comment Count */}
                   <div className="flex items-center space-x-1 ml-4">
@@ -1398,14 +1701,11 @@ const getAvatar = (src, username, size = 8) => {
   </div>
 
   {/* Floating Post Button - Centered */}
-  <div className="relative -top-1">
-    <button
-      onClick={() => alert("Post feature coming soon!")}
-      className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
+<div className="relative -top-1">                                                                      <Link href="/newPost">
+    <button                                                                                                className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
     >
-      <FiPlus className="w-6 h-6" />
-    </button>
-  </div>
+      <FiPlus className="w-6 h-6" />                                                                     </button>
+  </Link>                                                                                            </div>
 
   {/* Reels */}
   <div
@@ -1420,8 +1720,9 @@ const getAvatar = (src, username, size = 8) => {
     <span className="text-xs">Reels</span>
   </div>
 
-  {/* Profile */}
-  <Link href={`/profile/${user?.username || ""}`} className="transition">
+ {/* Profile */}
+{user?.username ? (
+  <Link href={`/profile/${user.username}`} className="transition">
     <div className={`flex flex-col items-center ${
       router.pathname.includes("/profile")
         ? "text-purple-600"
@@ -1431,6 +1732,15 @@ const getAvatar = (src, username, size = 8) => {
       <span className="text-xs">Profile</span>
     </div>
   </Link>
+) : (
+  <button
+    onClick={() => router.push('/login')}
+    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition"
+  >
+    <FiUser className="w-5 h-5" />
+    <span className="text-xs">Profile</span>
+  </button>
+)} 
 </div>
 
    </div>

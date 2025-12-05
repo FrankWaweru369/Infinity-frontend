@@ -144,6 +144,73 @@ export default function ReelsPage() {
   const videoRefs = useRef([]);
   const touchStartY = useRef(null);
   const fileInputRef = useRef(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+
+
+useEffect(() => {
+  if (!reels.length) return;
+
+  const container = document.querySelector('.h-full.snap-y.snap-mandatory.overflow-y-scroll');
+  if (!container) return;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const index = parseInt(entry.target.getAttribute('data-index'));
+          
+          // Only update if it's a different reel
+          if (index !== currentReelIndex) {
+            setCurrentReelIndex(index);
+            
+            // Mute and pause all other videos
+            videoRefs.current.forEach((video, i) => {
+              if (video && i !== index) {
+                video.muted = true;
+                video.pause();
+              }
+            });
+            
+            // Play the current video
+            const currentVideo = videoRefs.current[index];
+            if (currentVideo) {
+              currentVideo.muted = muted || audioBlocked;
+              currentVideo.play().catch(e => console.log("Auto-play prevented"));
+            }
+          }
+        }
+      });
+    },
+    {
+      threshold: 0.7,
+      root: container,
+    }
+  );
+
+  // Observe all reel containers
+  const reelContainers = document.querySelectorAll('[data-index]');
+  reelContainers.forEach(container => observer.observe(container));
+
+  return () => {
+    reelContainers.forEach(container => observer.unobserve(container));
+    observer.disconnect();
+  };
+}, [reels.length, muted, audioBlocked, currentReelIndex]); 
+
+
+
+useEffect(() => {
+  try {
+    const token = localStorage.getItem("token");
+    if (token) {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setCurrentUserId(payload.id);
+    }
+  } catch (error) {
+    console.error("Error decoding token:", error);
+  }
+}, []);
 
   const fetchReels = useCallback(async (filterType = 'foryou') => {
   try {
@@ -239,7 +306,7 @@ useEffect(() => { fetchReels(); }, [fetchReels]);
   let scrollTimeout;
   const debouncedScroll = () => {
     clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(handleScroll, 150);
+    scrollTimeout = setTimeout(handleScroll, 100);
   };
 
   window.addEventListener('scroll', debouncedScroll, { passive: true });
@@ -311,6 +378,22 @@ useEffect(() => { fetchReels(); }, [fetchReels]);
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [currentReelIndex, reels.length]);
+
+useEffect(() => {
+  if (!currentUserId) return;
+
+  const start = Date.now();
+
+  return () => {
+    const duration = Math.floor((Date.now() - start) / 1000);
+
+    axios.post(`${API_BASE}/analytics/visit`, {
+      userId: currentUserId,
+      page: window.location.pathname,
+      duration,
+    }).catch(err => console.error("Analytics track error:", err));
+  };
+}, [currentUserId]);
 
   // Touch handlers
   const handleTouchStart = (e) => {
@@ -546,297 +629,296 @@ useEffect(() => { fetchReels(); }, [fetchReels]);
       )}
 
       {/* Reels Container */}
-      <div
-        className="h-full snap-y snap-mandatory overflow-y-scroll pt-12"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        {reels.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-white">
-            <div className="text-center">
-              {activeTab === 'following' ? (
-                <>
-                  <FiUsers className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg mb-2">No reels from followed users</p>
-                  <p className="text-sm text-gray-400 mb-4">
-                    {user ? 'Start following users to see their reels here!' : 'Please login to see followed users'}
-                  </p>
-                  {user && (
-                    <button
-                      onClick={() => router.push('/explore')}
-                      className="bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition"
-                    >
-                      Find Users to Follow
-                    </button>
-                  )}
-                </>
-              ) : activeTab === 'myreels' ? (
-                <>
-                  <FiVideo className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg mb-2">You haven't created any reels yet</p>
-                  <p className="text-sm text-gray-400 mb-4">Start creating reels to build your collection!</p>
-                  <button
-                    onClick={() => setUploadModalOpen(true)}
-                    className="bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition"
-                  >
-                    Create Your First Reel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <FiVideo className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg mb-2">No reels yet</p>
-                  <p className="text-sm text-gray-400 mb-4">Be the first to create a reel!</p>
-                  <button
-                    onClick={() => setUploadModalOpen(true)}
-                    className="bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition"
-                  >
-                    Create Your First Reel
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        ) : (
-          reels.map((reel, index) => (
-            <div key={reel._id} className="h-full snap-start relative flex items-center justify-center"
-	    data-index={index}  >
-              {/* Video */}
-              <video
-                ref={el => videoRefs.current[index] = el}
-                src={buildAssetUrl(reel.videoUrl)}
-                className="h-full w-full object-cover"
-                loop
-                muted={muted || audioBlocked || index !== currentReelIndex}
-                autoPlay={index === currentReelIndex}
-                onClick={() => {
-                  togglePlay();
-                  if (audioBlocked) unlockAudio();
-                }}
-                playsInline
-                onLoadStart={() => setVideoLoading(prev => ({ ...prev, [reel._id]: true }))}
-                onLoadedData={() => setVideoLoading(prev => ({ ...prev, [reel._id]: false }))}
-                onError={() => {
-                  setVideoLoading(prev => ({ ...prev, [reel._id]: false }));
-                  console.error(`Failed to load video: ${reel.videoUrl}`);
-                }}
-              />
-
-              {/* Video Loading Indicator */}
-              {videoLoading[reel._id] && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-                  <div className="text-white">Loading...</div>
-                </div>
-              )}
-
-              {/* Video Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
-
-              {/* Right Action Buttons */}
-              <div className="absolute right-4 bottom-36 flex flex-col items-center space-y-6">
-                {/* Mute/Unmute Button */}
-                <button
-                  onClick={toggleMute}
-                  className="flex flex-col items-center relative"
-                >
-                  {muted || audioBlocked ? (
-                    <FiVolumeX className="w-8 h-8 text-white hover:text-purple-300 transition" />
-                  ) : (
-                    <FiVolume2 className="w-8 h-8 text-white hover:text-purple-300 transition" />
-                  )}
-                  <span className="text-white text-xs mt-1">
-                    {audioBlocked ? "Locked" : muted ? "Unmute" : "Mute"}
-                  </span>
-                  {audioBlocked && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black"></div>
-                  )}
-                </button>
-
-                {/* Like Button */}
-                <button
-                  onClick={() => handleLike(reel)}
-                  disabled={actionLoading[reel._id]}
-                  className="flex flex-col items-center"
-                >
-                  {likedReels[reel._id] ? (
-                    <FaHeart className="w-8 h-8 text-red-500" />
-                  ) : (
-                    <FiHeart className="w-8 h-8 text-white hover:text-purple-300 transition" />
-                  )}
-                  <span className="text-white text-xs mt-1">{reel.likes?.length || 0}</span>
-                </button>
-
-                {/* Comment Button */}
-                <button
-                  onClick={() => {
-                    setSelectedReel(reel);
-                    setCommentModalOpen(true);
-                  }}
-                  className="flex flex-col items-center"
-                >
-                  <FiMessageCircle className="w-8 h-8 text-white hover:text-purple-300 transition" />
-                  <span className="text-white text-xs mt-1">{reel.comments?.length || 0}</span>
-                </button>
-
-                {/* Share Button */}
-                <button
-                  onClick={() => handleShare(reel)}
-                  className="flex flex-col items-center"
-                >
-                  <FiShare className="w-8 h-8 text-white hover:text-purple-300 transition" />
-                  <span className="text-white text-xs mt-1">Share</span>
-                </button>
-
-                {/* Three Dots Button - Only show for reel owner */}
-{user && reel.author?._id === user._id && (
-  <div className="relative z-50">
-    <button
-      onClick={() => {
-        setReelToDelete(reel);
-        setDeleteModalOpen(true);
-      }}
-      className="flex flex-col items-center"
-    >
-      <FiMoreHorizontal className="w-8 h-8 text-white hover:text-purple-300 transition" />
-    </button>
-  </div>
-)}
-              </div>
-
-              {/* Reel Content */}
-              <div className="absolute bottom-16 left-0 right-0 p-4 text-white">
-                {/* User Info */}
-                <div className="flex items-center space-x-3 mb-2">
-                  <img
-                    src={buildAssetUrl(reel.author?.profilePicture)}
-                    alt={reel.author?.username}
-                    className="w-8 h-8 rounded-full border-2 border-purple-500"
-                    onError={(e) => {
-                      e.target.src = `https://i.pravatar.cc/150?u=${reel.author?.username || 'unknown'}`;
-                    }}
-                  />
-                  <span className="font-semibold text-sm">{reel.author?.username}</span>
-                  <FollowButton targetUser={reel.author} />
-                </div>
-
-                {/* Caption */}
-                <p className="text-sm font-medium mb-2 line-clamp-2">{reel.caption}</p>
-
-                {/* Music */}
-                <div className="flex items-center space-x-2 text-xs text-purple-200 opacity-90">
-                  <FiMusic className="w-3 h-3" />
-                  <span>{reel.music}</span>
-                </div>
-              </div>
-
-              {/* Play/Pause Overlay */}
-              {!playing && index === currentReelIndex && (
-                <button
-                  onClick={togglePlay}
-                  className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 z-10"
-                >
-                  <FaPlay className="w-16 h-16 text-purple-400 opacity-80" />
-                </button>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Progress Indicator */}
-      {reels.length > 0 && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 flex space-x-1 z-50">
-          {reels.map((_, index) => (
-            <div
-              key={index}
-              className={`h-1 rounded-full transition-all duration-300 ${
-                index === currentReelIndex
-                  ? "bg-purple-500 w-8"
-                  : "bg-gray-500 w-4"
-              }`}
-            />
-          ))}
-        </div>
-      )}
-		{/* Bottom Navbar */}
-      <div className="fixed bottom-0 left-0 w-full z-50 bg-black bg-opacity-80 backdrop-blur-lg border-t border-gray-800">
-        <div className="flex justify-around items-center py-3">
-          {/* Home */}
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="flex flex-col items-center text-gray-400 hover:text-white transition"
-          >
-            <FiHome className="w-6 h-6" />
-            <span className="text-xs mt-1">Home</span>
-          </button>
-
-          {/* For You */}
-          <button
-            onClick={() => fetchReels('foryou')}
-            className={`flex flex-col items-center transition ${
-              activeTab === 'foryou' ? 'text-purple-400' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <FiHeart className="w-6 h-6" />
-            <span className="text-xs mt-1">For You</span>
-            {activeTab === 'foryou' && (
-              <div className="w-1 h-1 bg-purple-400 rounded-full mt-1"></div>
+<div
+  className="h-full snap-y snap-mandatory overflow-y-scroll pt-12" 
+  onTouchStart={handleTouchStart}
+  onTouchEnd={handleTouchEnd}
+>
+  {reels.length === 0 ? (
+    <div className="h-full flex items-center justify-center text-white">
+      <div className="text-center">
+        {activeTab === 'following' ? (
+          <>
+            <FiUsers className="w-16 h-16 mx-auto mb-4 opacity-50" />
+            <p className="text-lg mb-2">No reels from followed users</p>
+            <p className="text-sm text-gray-400 mb-4">
+              {user ? 'Start following users to see their reels here!' : 'Please login to see followed users'}
+            </p>
+            {user && (
+              <button
+                onClick={() => router.push('/explore')}
+                className="bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition"
+              >
+                Find Users to Follow
+              </button>
             )}
-          </button>
-
-          {/* Create Reel */}
-          <div className="relative -top-6">
+          </>
+        ) : activeTab === 'myreels' ? (
+          <>
+            <FiVideo className="w-16 h-16 mx-auto mb-4 opacity-50" />
+            <p className="text-lg mb-2">You haven't created any reels yet</p>
+            <p className="text-sm text-gray-400 mb-4">Start creating reels to build your collection!</p>
             <button
               onClick={() => setUploadModalOpen(true)}
-              className="bg-purple-600 text-white rounded-full p-3 shadow-lg hover:bg-purple-700 transition transform hover:scale-105"
+              className="bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition"
             >
-              <FiPlus className="w-6 h-6" />
+              Create Your First Reel
             </button>
-          </div>
+          </>
+        ) : (
+          <>
+            <FiVideo className="w-16 h-16 mx-auto mb-4 opacity-50" />
+            <p className="text-lg mb-2">No reels yet</p>
+            <p className="text-sm text-gray-400 mb-4">Be the first to create a reel!</p>
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="bg-purple-600 text-white px-6 py-2 rounded-full hover:bg-purple-700 transition"
+            >
+              Create Your First Reel
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  ) : (
+    reels.map((reel, index) => (
+      <div key={reel._id} className="h-full snap-start relative flex items-center justify-center"
+        data-index={index}>
+        {/* Video */}
+        <video
+          ref={el => videoRefs.current[index] = el}
+          src={buildAssetUrl(reel.videoUrl)}
+          className="h-full w-full object-cover"
+          loop
+          muted={muted || audioBlocked || index !== currentReelIndex}
+          autoPlay={index === currentReelIndex}
+          onClick={() => {
+            togglePlay();
+            if (audioBlocked) unlockAudio();
+          }}
+          playsInline
+          onLoadStart={() => setVideoLoading(prev => ({ ...prev, [reel._id]: true }))}
+          onLoadedData={() => setVideoLoading(prev => ({ ...prev, [reel._id]: false }))}
+          onError={() => {
+            setVideoLoading(prev => ({ ...prev, [reel._id]: false }));
+            console.error(`Failed to load video: ${reel.videoUrl}`);
+          }}
+        />
 
-          {/* Following */}
+        {/* Video Loading Indicator */}
+        {videoLoading[reel._id] && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="text-white">Loading...</div>
+          </div>
+        )}
+
+        {/* Video Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
+
+        {/* Right Action Buttons */}
+        <div className="absolute right-4 bottom-36 flex flex-col items-center space-y-6">
+          {/* Mute/Unmute Button */}
           <button
-            onClick={() => {
-              if (user) {
-                fetchReels('following');
-              } else {
-                alert('❌ Please login to view followed users reels');
-                router.push('/login');
-              }
-            }}
-            className={`flex flex-col items-center transition ${
-              activeTab === 'following' ? 'text-purple-400' : 'text-gray-400 hover:text-white'
-            }`}
+            onClick={toggleMute}
+            className="flex flex-col items-center relative"
           >
-            <FiUsers className="w-6 h-6" />
-            <span className="text-xs mt-1">Following</span>
-            {activeTab === 'following' && (
-              <div className="w-1 h-1 bg-purple-400 rounded-full mt-1"></div>
+            {muted || audioBlocked ? (
+              <FiVolumeX className="w-8 h-8 text-white hover:text-purple-300 transition" />
+            ) : (
+              <FiVolume2 className="w-8 h-8 text-white hover:text-purple-300 transition" />
+            )}
+            <span className="text-white text-xs mt-1">
+              {audioBlocked ? "Locked" : muted ? "Unmute" : "Mute"}
+            </span>
+            {audioBlocked && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black"></div>
             )}
           </button>
 
-          {/* My Reels*/}
-<button
-  onClick={() => {
-    if (user) {
-      setActiveTab('myreels');
-      fetchReels('myreels');
-    } else {
-      router.push('/login');
-    }
-  }}
-  className={`flex flex-col items-center transition ${
-    activeTab === 'myreels' ? 'text-purple-400' : 'text-gray-400 hover:text-white'
-  }`}
->
-  <FiVideo className="w-6 h-6" />
-  <span className="text-xs mt-1">My Reels</span>
-  {activeTab === 'myreels' && (
-    <div className="w-1 h-1 bg-purple-400 rounded-full mt-1"></div>
-  )}
-</button>
+          {/* Like Button */}
+          <button
+            onClick={() => handleLike(reel)}
+            disabled={actionLoading[reel._id]}
+            className="flex flex-col items-center"
+          >
+            {likedReels[reel._id] ? (
+              <FaHeart className="w-8 h-8 text-red-500" />
+            ) : (
+              <FiHeart className="w-8 h-8 text-white hover:text-purple-300 transition" />
+            )}
+            <span className="text-white text-xs mt-1">{reel.likes?.length || 0}</span>
+          </button>
+
+          {/* Comment Button */}
+          <button
+            onClick={() => {
+              setSelectedReel(reel);
+              setCommentModalOpen(true);
+            }}
+            className="flex flex-col items-center"
+          >
+            <FiMessageCircle className="w-8 h-8 text-white hover:text-purple-300 transition" />
+            <span className="text-white text-xs mt-1">{reel.comments?.length || 0}</span>
+          </button>
+
+          {/* Share Button */}
+          <button
+            onClick={() => handleShare(reel)}
+            className="flex flex-col items-center"
+          >
+            <FiShare className="w-8 h-8 text-white hover:text-purple-300 transition" />
+            <span className="text-white text-xs mt-1">Share</span>
+          </button>
+          {/* Three Dots Button - Only show for reel owner */}
+          {user && reel.author?._id === user._id && (
+            <div className="relative z-50">
+              <button
+                onClick={() => {
+                  setReelToDelete(reel);
+                  setDeleteModalOpen(true);
+                }}
+                className="flex flex-col items-center"
+              >
+                <FiMoreHorizontal className="w-8 h-8 text-white hover:text-purple-300 transition" />
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Reel Content*/}
+        <div className="absolute bottom-20 left-0 right-0 p-4 text-white">
+          {/* User Info */}
+          <div className="flex items-center space-x-3 mb-2">
+            <img
+              src={buildAssetUrl(reel.author?.profilePicture)}
+              alt={reel.author?.username}
+              className="w-8 h-8 rounded-full border-2 border-purple-500"
+              onError={(e) => {
+                e.target.src = `https://i.pravatar.cc/150?u=${reel.author?.username || 'unknown'}`;
+              }}
+            />
+            <span className="font-semibold text-sm">{reel.author?.username}</span>
+            <FollowButton targetUser={reel.author} />
+          </div>
+
+          {/* Caption */}
+          <p className="text-sm font-medium mb-2 line-clamp-2">{reel.caption}</p>
+
+          {/* Music */}
+          <div className="flex items-center space-x-2 text-xs text-purple-200 opacity-90">
+            <FiMusic className="w-3 h-3" />
+            <span>{reel.music}</span>
+          </div>
+        </div>
+
+        {/* Play/Pause Overlay */}
+        {!playing && index === currentReelIndex && (
+          <button
+            onClick={togglePlay}
+            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 z-10"
+          >
+            <FaPlay className="w-16 h-16 text-purple-400 opacity-80" />
+          </button>
+        )}
       </div>
+    ))
+  )}
+</div>
+
+{/* Progress Indicator */}
+{reels.length > 0 && (
+  <div className="absolute top-16 left-1/2 transform -translate-x-1/2 flex space-x-1 z-50">
+    {reels.map((_, index) => (
+      <div
+        key={index}
+        className={`h-1 rounded-full transition-all duration-300 ${
+          index === currentReelIndex
+            ? "bg-purple-500 w-8"
+            : "bg-gray-500 w-4"
+        }`}
+      />
+    ))}
+  </div>
+)}
+		{/* Bottom Navbar - Always Visible */}
+<div className="fixed bottom-0 left-0 w-full z-50 bg-black/90 backdrop-blur-lg border-t border-gray-800/50">
+  <div className="flex justify-around items-center py-3 px-1">
+    {/* Home */}
+    <button
+      onClick={() => router.push('/dashboard')}
+      className="flex flex-col items-center text-gray-400 hover:text-white transition min-w-0 px-1"
+    >
+      <FiHome className="w-6 h-6" />
+      <span className="text-xs mt-1">Home</span>
+    </button>
+
+    {/* For You */}
+    <button
+      onClick={() => fetchReels('foryou')}
+      className={`flex flex-col items-center transition min-w-0 px-1 ${
+        activeTab === 'foryou' ? 'text-purple-400' : 'text-gray-400 hover:text-white'
+      }`}
+    >
+      <FiHeart className="w-6 h-6" />
+      <span className="text-xs mt-1">For You</span>
+      {activeTab === 'foryou' && (
+        <div className="w-1 h-1 bg-purple-400 rounded-full mt-1"></div>
+      )}
+    </button>
+
+    {/* Create Reel - Centered Floating Button */}
+    <div className="relative -top-6 mx-1">
+      <button
+        onClick={() => setUploadModalOpen(true)}
+        className="bg-purple-600 text-white rounded-full p-3.5 shadow-xl hover:bg-purple-700 transition-transform hover:scale-105 active:scale-95 border-2 border-white/20"
+      >
+        <FiPlus className="w-6 h-6" />
+      </button>
+    </div>
+
+    {/* Following */}
+    <button
+      onClick={() => {
+        if (user) {
+          fetchReels('following');
+        } else {
+          alert('❌ Please login to view followed users reels');
+          router.push('/login');
+        }
+      }}
+      className={`flex flex-col items-center transition min-w-0 px-1 ${
+        activeTab === 'following' ? 'text-purple-400' : 'text-gray-400 hover:text-white'
+      }`}
+    >
+      <FiUsers className="w-6 h-6" />
+      <span className="text-xs mt-1">Following</span>
+      {activeTab === 'following' && (
+        <div className="w-1 h-1 bg-purple-400 rounded-full mt-1"></div>
+      )}
+    </button>
+
+    {/* My Reels */}
+    <button
+      onClick={() => {
+        if (user) {
+          setActiveTab('myreels');
+          fetchReels('myreels');
+        } else {
+          router.push('/login');
+        }
+      }}
+      className={`flex flex-col items-center transition min-w-0 px-1 ${
+        activeTab === 'myreels' ? 'text-purple-400' : 'text-gray-400 hover:text-white'
+      }`}
+    >
+      <FiVideo className="w-6 h-6" />
+      <span className="text-xs mt-1">My Reels</span>
+      {activeTab === 'myreels' && (
+        <div className="w-1 h-1 bg-purple-400 rounded-full mt-1"></div>
+      )}
+    </button>
+  </div>
+</div>
 
       {/* Delete Confirmation Modal */}
       {deleteModalOpen && (

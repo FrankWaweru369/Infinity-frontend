@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { FiSearch, FiUsers, FiFileText, FiUserPlus, FiUserCheck, FiFilter, FiHome, FiUser, FiVideo, FiPlus, FiMoreHorizontal,FiHeart,FiMessageCircle, FiShare, FiArrowRight } from 'react-icons/fi';
 import config from '../src/config';
+import axios from 'axios';
+                                                                                                     const API_BASE = config.apiUrl;
 
 export default function Explore() {
 
@@ -16,23 +18,48 @@ export default function Explore() {
   const [hasSearched, setHasSearched] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentUsername, setCurrentUsername] = useState('');
+  const [currentUserData, setCurrentUserData] = useState(null);
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const router = useRouter();
 
+
 useEffect(() => {
-  const getCurrentUserFromToken = () => {
+  const fetchCurrentUser = async () => {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setAuthChecking(false);
+      return;
+    }
+    
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const payload = JSON.parse(atob(token.split('.')[1]));
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
         
-        setCurrentUsername(payload.username);
+        let userData;
+        if (data.user) {
+          userData = data.user;
+        } else if (data._id || data.id) {
+          userData = data;
+        }
+        
+        if (userData) {
+          setUser(userData);
+        }
       }
     } catch (error) {
-      console.error('Error getting username from token:', error);
+      console.error('Error fetching user:', error);
+    } finally {
+      setAuthChecking(false);
     }
   };
-
-  getCurrentUserFromToken();
+  
+  fetchCurrentUser();
 }, []);
 
 
@@ -93,6 +120,22 @@ useEffect(() => {
 
   getCurrentUserId();
 }, []);
+
+useEffect(() => {
+  if (!currentUserId) return;
+
+  const start = Date.now();
+
+  return () => {
+    const duration = Math.floor((Date.now() - start) / 1000);
+
+    axios.post(`${API_BASE}/analytics/visit`, {
+      userId: currentUserId,
+      page: window.location.pathname,
+      duration
+    }).catch(err => console.error("Analytics tracking error:", err));
+  };
+}, [currentUserId]);
 
   const fetchPopularPosts = async () => {
     try {
@@ -689,14 +732,11 @@ const handleUnfollow = async (userId) => {
   </div>
 
   {/* Floating Post Button - Centered */}
-  <div className="relative -top-1">
-    <button
-      onClick={() => alert("Post feature coming soon!")}
-      className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
+<div className="relative -top-1">                                                                      <Link href="/newPost">
+    <button                                                                                                className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
     >
-      <FiPlus className="w-6 h-6" />
-    </button>
-  </div>
+      <FiPlus className="w-6 h-6" />                                                                     </button>
+  </Link>                                                                                            </div>
 
   {/* Reels */}
   <div
@@ -712,14 +752,42 @@ const handleUnfollow = async (userId) => {
   </div>
 
   
-<Link href={`/profile/${currentUsername}`} className="transition">
-  <div className={`flex flex-col items-center ${
-    router.pathname.includes("/profile")
-      ? "text-purple-600"                                                                                  : "text-gray-700 hover:text-purple-600"                                                          }`}>
+{/* Profile */}
+{authChecking ? (
+  <div className="flex flex-col items-center text-gray-400">
+    <div className="w-5 h-5 rounded-full border-2 border-gray-300 border-t-purple-600 animate-spin"></div>
+    <span className="text-xs mt-1">...</span>
+  </div>
+) : user?.username ? (
+  <Link 
+    href={`/profile/${user.username}`} 
+    className="transition"
+    onClick={(e) => {
+      e.preventDefault();
+      router.push(`/profile/${user.username}`);
+    }}
+  >
+    <div className={`flex flex-col items-center ${
+      router.pathname.includes("/profile")
+        ? "text-purple-600"
+        : "text-gray-700 hover:text-purple-600"
+    }`}>
+      <FiUser className="w-5 h-5" />
+      <span className="text-xs">Profile</span>
+    </div>
+  </Link>
+) : (
+  <button
+    onClick={() => {
+      alert('No user found! Redirecting to login...');
+      router.push('/login');
+    }}
+    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition"
+  >
     <FiUser className="w-5 h-5" />
     <span className="text-xs">Profile</span>
-  </div>
-</Link>
+  </button>
+)}
 </div>
     </div>
   );
