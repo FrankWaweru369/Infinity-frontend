@@ -71,6 +71,9 @@ const [commentLoading, setCommentLoading] = useState({});
 const [isMounted, setIsMounted] = useState(false);
 const [fullImage, setFullImage] = useState(null);
 const [likedPosts, setLikedPosts] = useState({});
+const [expandedComments, setExpandedComments] = useState({});
+const [recommentInputs, setRecommentInputs] = useState({});
+const [recommentLoading, setRecommentLoading] = useState({});
 
 const dropdownRef = useRef(null);
 
@@ -169,7 +172,44 @@ useEffect(() => {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  
+ // Get current user data for optimistic updates
+const getCurrentUserData = () => {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const currentUserId = payload.id;
+    
+    // Get user from context or localStorage
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      const parsed = JSON.parse(userData);
+      if (parsed._id === currentUserId || parsed.id === currentUserId) {
+        return parsed;
+      }
+    }
+    
+    // Fallback to current profile user if it's the same
+    if (user && (user._id === currentUserId || user.id === currentUserId)) {
+      return user;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error getting current user data:", error);
+    return null;
+  }
+};
+
+// Toggle comment expansion
+const toggleCommentExpansion = (postId, commentId) => {
+  setExpandedComments(prev => ({
+    ...prev,
+    [`${postId}-${commentId}`]: !prev[`${postId}-${commentId}`]
+  }));
+};
+
   const imageUrl = (postImage) => {
   return postImage || null;
 };
@@ -214,23 +254,46 @@ useEffect(() => {
     setUserPosts([]);
     return;
   }
-  
+
   const filtered = posts.filter((p) => p.author?.username === username);
-  // sort newest to oldest (createdAt descending) if createdAt present
-  filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  setUserPosts(filtered);
   
+  // Process posts to ensure all comment/recomment fields exist and are properly structured
+  const processedPosts = filtered.map(post => ({
+    ...post,
+    comments: post.comments?.map(comment => ({
+      _id: comment._id || `comment-${Math.random()}`,
+      user: comment.user || { username: 'Unknown', _id: '' },
+      text: comment.text || '',
+      likes: comment.likes || [],
+      likeCount: comment.likeCount || comment.likes?.length || 0,
+      recomments: comment.recomments?.map(recomment => ({
+        _id: recomment._id || `recomment-${Math.random()}`,
+        user: recomment.user || { username: 'Unknown', _id: '' },
+        text: recomment.text || '',
+        likes: recomment.likes || [],
+        likeCount: recomment.likeCount || recomment.likes?.length || 0,
+        createdAt: recomment.createdAt || new Date()
+      })) || [],
+      recommentCount: comment.recommentCount || comment.recomments?.length || 0,
+      createdAt: comment.createdAt || new Date()
+    })) || []
+  }));
+  
+  // Sort newest to oldest
+  processedPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  setUserPosts(processedPosts);
+
   // ✅ INITIALIZE likedPosts state
   const token = localStorage.getItem("token");
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
       const currentUserId = payload.id;
-      
+
       const likedPostsObj = {};
-      filtered.forEach(post => {
+      processedPosts.forEach(post => {
         let userLiked = false;
-        
+
         if (post.likes && Array.isArray(post.likes)) {
           userLiked = post.likes.some(like => {
             if (typeof like === 'string') {
@@ -243,10 +306,10 @@ useEffect(() => {
             return false;
           });
         }
-        
+
         likedPostsObj[post._id] = userLiked;
       });
-      
+
       setLikedPosts(likedPostsObj);
     } catch (error) {
       console.error("Error initializing likedPosts:", error);
@@ -509,6 +572,513 @@ const handleLike = async (post) => {
   }
 };
 
+// ✅ Like/Unlike a comment - UPDATED to refresh activeCommentsPost
+const handleLikeComment = async (postId, commentId) => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    alert('Please login to like comments');
+    return;
+  }
+
+  try {
+    // Optimistic update for userPosts
+    setUserPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const updatedComments = post.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const isLiked = comment.likes?.some(like => 
+              String(like._id || like) === String(userId)
+            );
+            
+            const updatedLikes = isLiked 
+              ? comment.likes.filter(like => 
+                  String(like._id || like) !== String(userId)
+                )
+              : [...(comment.likes || []), userId];
+            
+            return {
+              ...comment,
+              likes: updatedLikes,
+              likeCount: updatedLikes.length
+            };
+          }
+          return comment;
+        });
+        
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    }));
+
+    // ALSO update activeCommentsPost if it's the current post
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(prev => {
+        if (!prev) return prev;
+        
+        const updatedComments = prev.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const isLiked = comment.likes?.some(like => 
+              String(like._id || like) === String(userId)
+            );
+            
+            const updatedLikes = isLiked 
+              ? comment.likes.filter(like => 
+                  String(like._id || like) !== String(userId)
+                )
+              : [...(comment.likes || []), userId];
+            
+            return {
+              ...comment,
+              likes: updatedLikes,
+              likeCount: updatedLikes.length
+            };
+          }
+          return comment;
+        });
+        
+        return { ...prev, comments: updatedComments };
+      });
+    }
+
+    // API call
+    const response = await axios.put(
+      `${API_BASE}/posts/${postId}/comments/${commentId}/like`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+
+    const updatedComment = response.data;
+
+    // Update with server response for userPosts
+    setUserPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const updatedComments = post.comments?.map(comment => 
+          comment._id === commentId ? updatedComment : comment
+        );
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    }));
+
+    // Update activeCommentsPost with server response
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(prev => {
+        if (!prev) return prev;
+        
+        const updatedComments = prev.comments?.map(comment => 
+          comment._id === commentId ? updatedComment : comment
+        );
+        return { ...prev, comments: updatedComments };
+      });
+    }
+
+  } catch (error) {
+    console.error('Error liking comment:', error);
+    alert('Failed to like comment');
+    
+    // Revert optimistic update
+    const originalPost = userPosts.find(p => p._id === postId);
+    if (originalPost) {
+      setUserPosts(prev => prev.map(post => 
+        post._id === postId ? { ...post, comments: originalPost.comments } : post
+      ));
+      
+      if (activeCommentsPost && activeCommentsPost._id === postId) {
+        setActiveCommentsPost(originalPost);
+      }
+    }
+  }
+};
+
+// ✅ Add a recomment - UPDATED to refresh activeCommentsPost
+const handleAddRecomment = async (postId, commentId) => {
+  const text = recommentInputs[`${postId}-${commentId}`]?.trim();
+  const userId = getCurrentUserId();
+  
+  if (!text || !userId) {
+    alert(!text ? 'Please enter recomment text' : 'Please login to recomment');
+    return;
+  }
+
+  setRecommentLoading(prev => ({ ...prev, [`${postId}-${commentId}`]: true }));
+
+  try {
+    // Optimistic update for userPosts
+    const tempRecommentId = `temp-${Date.now()}`;
+    const currentUser = getCurrentUserData();
+    
+    // Update userPosts
+    setUserPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const updatedComments = post.comments?.map(comment => {
+          if (comment._id === commentId) {
+            return {
+              ...comment,
+              recomments: [
+                ...(comment.recomments || []),
+                {
+                  _id: tempRecommentId,
+                  text,
+                  user: currentUser || {
+                    _id: userId,
+                    username: 'You',
+                    profilePicture: ''
+                  },
+                  likes: [],
+                  likeCount: 0,
+                  createdAt: new Date()
+                }
+              ],
+              recommentCount: (comment.recommentCount || 0) + 1
+            };
+          }
+          return comment;
+        });
+        
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    }));
+
+    // ALSO update activeCommentsPost if it's the current post
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(prev => {
+        if (!prev) return prev;
+        
+        const updatedComments = prev.comments?.map(comment => {
+          if (comment._id === commentId) {
+            return {
+              ...comment,
+              recomments: [
+                ...(comment.recomments || []),
+                {
+                  _id: tempRecommentId,
+                  text,
+                  user: currentUser || {
+                    _id: userId,
+                    username: 'You',
+                    profilePicture: ''
+                  },
+                  likes: [],
+                  likeCount: 0,
+                  createdAt: new Date()
+                }
+              ],
+              recommentCount: (comment.recommentCount || 0) + 1
+            };
+          }
+          return comment;
+        });
+        
+        return { ...prev, comments: updatedComments };
+      });
+    }
+
+    // API call
+    const response = await axios.post(
+      `${API_BASE}/posts/${postId}/comments/${commentId}/recomment`,
+      { text },
+      { headers: getAuthHeaders() }
+    );
+
+    const newRecomment = response.data;
+
+    // Update with real data
+    setUserPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const updatedComments = post.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const filteredRecomments = comment.recomments?.filter(recomment => 
+              recomment._id !== tempRecommentId
+            ) || [];
+            
+            return {
+              ...comment,
+              recomments: [...filteredRecomments, newRecomment]
+            };
+          }
+          return comment;
+        });
+        
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    }));
+
+    // Update activeCommentsPost with real data
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(prev => {
+        if (!prev) return prev;
+        
+        const updatedComments = prev.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const filteredRecomments = comment.recomments?.filter(recomment => 
+              recomment._id !== tempRecommentId
+            ) || [];
+            
+            return {
+              ...comment,
+              recomments: [...filteredRecomments, newRecomment]
+            };
+          }
+          return comment;
+        });
+        
+        return { ...prev, comments: updatedComments };
+      });
+    }
+
+    // Clear input
+    setRecommentInputs(prev => {
+      const newState = { ...prev };
+      delete newState[`${postId}-${commentId}`];
+      return newState;
+    });
+
+    // Auto-expand
+    if (!expandedComments[`${postId}-${commentId}`]) {
+      setExpandedComments(prev => ({
+        ...prev,
+        [`${postId}-${commentId}`]: true
+      }));
+    }
+
+  } catch (error) {
+    console.error('Error adding recomment:', error);
+    alert(`Failed to add recomment: ${error.message}`);
+    
+    // Revert optimistic update for userPosts
+    setUserPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const updatedComments = post.comments?.map(comment => {
+          if (comment._id === commentId) {
+            return {
+              ...comment,
+              recomments: comment.recomments?.filter(recomment => 
+                !recomment._id.startsWith('temp-')
+              ) || [],
+              recommentCount: Math.max(0, (comment.recommentCount || 1) - 1)
+            };
+          }
+          return comment;
+        });
+        
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    }));
+
+    // Revert optimistic update for activeCommentsPost
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(prev => {
+        if (!prev) return prev;
+        
+        const updatedComments = prev.comments?.map(comment => {
+          if (comment._id === commentId) {
+            return {
+              ...comment,
+              recomments: comment.recomments?.filter(recomment => 
+                !recomment._id.startsWith('temp-')
+              ) || [],
+              recommentCount: Math.max(0, (comment.recommentCount || 1) - 1)
+            };
+          }
+          return comment;
+        });
+        
+        return { ...prev, comments: updatedComments };
+      });
+    }
+  } finally {
+    setRecommentLoading(prev => ({ ...prev, [`${postId}-${commentId}`]: false }));
+  }
+};
+
+// ✅ Like/Unlike a recomment - UPDATED to refresh activeCommentsPost
+const handleLikeRecomment = async (postId, commentId, recommentId) => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    alert('Please login to like recomments');
+    return;
+  }
+
+  try {
+    // Optimistic update for userPosts
+    setUserPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const updatedComments = post.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const updatedRecomments = comment.recomments?.map(recomment => {
+              if (recomment._id === recommentId) {
+                const isLiked = recomment.likes?.some(like => 
+                  String(like._id || like) === String(userId)
+                );
+                
+                const updatedLikes = isLiked 
+                  ? recomment.likes.filter(like => 
+                      String(like._id || like) !== String(userId)
+                    )
+                  : [...(recomment.likes || []), userId];
+                
+                return {
+                  ...recomment,
+                  likes: updatedLikes,
+                  likeCount: updatedLikes.length
+                };
+              }
+              return recomment;
+            });
+            
+            return {
+              ...comment,
+              recomments: updatedRecomments
+            };
+          }
+          return comment;
+        });
+        
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    }));
+
+    // ALSO update activeCommentsPost if it's the current post
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(prev => {
+        if (!prev) return prev;
+        
+        const updatedComments = prev.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const updatedRecomments = comment.recomments?.map(recomment => {
+              if (recomment._id === recommentId) {
+                const isLiked = recomment.likes?.some(like => 
+                  String(like._id || like) === String(userId)
+                );
+                
+                const updatedLikes = isLiked 
+                  ? recomment.likes.filter(like => 
+                      String(like._id || like) !== String(userId)
+                    )
+                  : [...(recomment.likes || []), userId];
+                
+                return {
+                  ...recomment,
+                  likes: updatedLikes,
+                  likeCount: updatedLikes.length
+                };
+              }
+              return recomment;
+            });
+            
+            return {
+              ...comment,
+              recomments: updatedRecomments
+            };
+          }
+          return comment;
+        });
+        
+        return { ...prev, comments: updatedComments };
+      });
+    }
+
+    // API call
+    const response = await axios.put(
+      `${API_BASE}/posts/${postId}/comments/${commentId}/recomments/${recommentId}/like`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+
+    const updatedRecomment = response.data;
+
+    // Update with server response
+    setUserPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const updatedComments = post.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const updatedRecomments = comment.recomments?.map(recomment => 
+              recomment._id === recommentId ? updatedRecomment : recomment
+            );
+            return { ...comment, recomments: updatedRecomments };
+          }
+          return comment;
+        });
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    }));
+
+    // Update activeCommentsPost with server response
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(prev => {
+        if (!prev) return prev;
+        
+        const updatedComments = prev.comments?.map(comment => {
+          if (comment._id === commentId) {
+            const updatedRecomments = comment.recomments?.map(recomment => 
+              recomment._id === recommentId ? updatedRecomment : recomment
+            );
+            return { ...comment, recomments: updatedRecomments };
+          }
+          return comment;
+        });
+        return { ...prev, comments: updatedComments };
+      });
+    }
+
+  } catch (error) {
+    console.error('Error liking recomment:', error);
+    alert('Failed to like recomment');
+    
+    // Revert optimistic update
+    const originalPost = userPosts.find(p => p._id === postId);
+    if (originalPost) {
+      setUserPosts(prev => prev.map(post => 
+        post._id === postId ? { ...post, comments: originalPost.comments } : post
+      ));
+      
+      if (activeCommentsPost && activeCommentsPost._id === postId) {
+        setActiveCommentsPost(originalPost);
+      }
+    }
+  }
+};
+
+// Helper to refresh a single post
+const refreshPost = async (postId) => {
+  try {
+    const res = await fetch(`${API_BASE}/posts/${postId}`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch post: ${res.status}`);
+    }
+
+    const updatedPost = await res.json();
+
+    // Update userPosts
+    setUserPosts(prev => prev.map(post =>
+      post._id === postId ? updatedPost : post
+    ));
+
+    // Update global posts if in context
+    if (postsContext && typeof postsContext.setPosts === "function") {
+      postsContext.setPosts(prev => prev.map(post =>
+        post._id === postId ? updatedPost : post
+      ));
+    }
+
+    // Update activeCommentsPost if it's open
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(updatedPost);
+    }
+
+    return updatedPost;
+  } catch (error) {
+    console.error('Error refreshing post:', error);
+  }
+};
 
   // Delete post (only for owner)
   const handleDelete = async (postId) => {
@@ -1338,7 +1908,7 @@ const getAvatar = (src, username, size = 8) => {
 	</div>
 
                   
-   {/* Comments */}
+      {/* Comments */}
 <div className="mt-3 space-y-2">
   {post.comments && post.comments.length > 0 ? (
     <>
@@ -1549,9 +2119,9 @@ const getAvatar = (src, username, size = 8) => {
     </div>
   </div>
 )}
-                  {/* Comments Modal */}
+                 {/* Enhanced Comments Modal */}
 {activeCommentsPost && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-white w-96 max-h-[80vh] overflow-y-auto rounded-lg p-4 relative shadow-lg">
       <button
         onClick={() => setActiveCommentsPost(null)}
@@ -1560,38 +2130,178 @@ const getAvatar = (src, username, size = 8) => {
         <FiX className="w-5 h-5" />
       </button>
       <h2 className="font-bold text-lg mb-3">
-        Comments ({activeCommentsPost.comments.length})
+        Comments ({activeCommentsPost.comments?.length || 0})
       </h2>
 
-      {activeCommentsPost.comments.map((c, i) => {                                                                            const username = c.user?.username ?? "user";
-        const avatarSrc = imageUrl(c.user?.profilePicture);
-        const text = c.text ?? c;
-        return (
-  <div
-    key={i}
-    className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50"
-  >
-    {/* Avatar */}
-    <a href={`/profile/${c.user.username}`}>
-      {getAvatar(avatarSrc, username, 6)}
-    </a>
-    {/* Username + Comment */}
-    <div className="flex flex-col">
-      <a
-        href={`/profile/${c.user.username}`}
-        className="font-semibold text-sm hover:underline text-gray-800"
-      >
-        {username}
-      </a>
-      <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200">
-        {text}
-      </p>
-    </div>                                                                                                              </div>
-);
-      })}
+      <div className="space-y-3">
+        {activeCommentsPost.comments?.map((comment) => {
+          const username = comment.user?.username || 'User';
+          const avatarSrc = imageUrl(comment.user?.profilePicture);
+          const userId = getCurrentUserId();
+          const isCommentLiked = comment.likes?.some(like => 
+            String(like._id || like) === String(userId)
+          );
+          const isExpanded = expandedComments[`${activeCommentsPost._id}-${comment._id}`];
+
+          return (
+            <div key={comment._id} className="border-b pb-3">
+              {/* Main Comment */}
+              <div className="flex items-start space-x-3 mb-2">
+                {/* Avatar */}
+                <a href={`/profile/${comment.user?.username}`}>
+                  {getAvatar(avatarSrc, username, 8)}
+                </a>
+
+                <div className="flex-1">
+                  {/* Username + Comment */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <a
+                        href={`/profile/${comment.user?.username}`}
+                        className="font-semibold text-sm hover:underline text-gray-800"
+                      >
+                        {username}
+                      </a>
+                      <span className="text-xs text-gray-500 ml-2">
+                        {new Date(comment.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {/* Comment Like Button */}
+                    <button
+                      onClick={() => handleLikeComment(activeCommentsPost._id, comment._id)}
+                      className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs"
+                    >
+                      {isCommentLiked ? (
+                        <FaHeart className="w-3.5 h-3.5 text-red-500" />
+                      ) : (
+                        <FiHeart className="w-3.5 h-3.5" />
+                      )}
+                      <span>{comment.likeCount || 0}</span>
+                    </button>
+                  </div>
+                  
+                  <p className="text-gray-700 text-sm mt-1">{comment.text}</p>
+
+                  {/* Recomment Button */}
+                  <div className="flex items-center space-x-4 mt-2">
+                    <button
+                      onClick={() => toggleCommentExpansion(activeCommentsPost._id, comment._id)}
+                      className="text-xs text-purple-600 hover:underline"
+                    >
+                      {comment.recommentCount || 0} Recomment{comment.recommentCount !== 1 ? 's' : ''}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRecommentInputs(prev => ({
+                          ...prev,
+                          [`${activeCommentsPost._id}-${comment._id}`]: ''
+                        }));
+                        setExpandedComments(prev => ({
+                          ...prev,
+                          [`${activeCommentsPost._id}-${comment._id}`]: true
+                        }));
+                      }}
+                      className="text-xs text-gray-500 hover:text-purple-600"
+                    >
+                      Reply
+                    </button>
+                  </div>
+
+                  {/* Recomments Section */}
+                  {isExpanded && (
+                    <div className="mt-3 ml-4 pl-3 border-l-2 border-gray-300">
+                      {/* Show existing recomments */}
+                      {comment.recomments && comment.recomments.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          {comment.recomments.map((recomment) => {
+                            const recommentUsername = recomment.user?.username || 'User';
+                            const recommentAvatarSrc = imageUrl(recomment.user?.profilePicture);
+                            const isRecommentLiked = recomment.likes?.some(like => 
+                              String(like._id || like) === String(userId)
+                            );
+
+                            return (
+                              <div key={recomment._id} className="flex items-start space-x-2">
+                                <img
+                                  src={recommentAvatarSrc || `https://i.pravatar.cc/150?u=${recommentUsername}`}
+                                  alt={recommentUsername}
+                                  className="w-5 h-5 rounded-full flex-shrink-0"
+                                  onError={(e) => {
+                                    e.target.src = `https://i.pravatar.cc/150?u=${recommentUsername || 'unknown'}`;
+                                  }}
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <span className="text-gray-800 font-semibold text-xs">
+                                      {recommentUsername}
+                                    </span>
+                                    <span className="text-gray-400 text-xs">
+                                      {new Date(recomment.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-700 text-xs mb-1">{recomment.text}</p>
+                                  
+                                  {/* Recomment Like Button */}
+                                  <button
+                                    onClick={() => handleLikeRecomment(activeCommentsPost._id, comment._id, recomment._id)}
+                                    className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs"
+                                  >
+                                    {isRecommentLiked ? (
+                                      <FaHeart className="w-3 h-3 text-red-500" />
+                                    ) : (
+                                      <FiHeart className="w-3 h-3" />
+                                    )}
+                                    <span>{recomment.likeCount || 0}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Add Recomment Input */}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          value={recommentInputs[`${activeCommentsPost._id}-${comment._id}`] || ''}
+                          onChange={(e) =>
+                            setRecommentInputs({
+                              ...recommentInputs,
+                              [`${activeCommentsPost._id}-${comment._id}`]: e.target.value
+                            })
+                          }
+                          placeholder="Write a recomment..."
+                          className="flex-1 border rounded-md p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddRecomment(activeCommentsPost._id, comment._id);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleAddRecomment(activeCommentsPost._id, comment._id)}
+                          disabled={recommentLoading[`${activeCommentsPost._id}-${comment._id}`]}
+                          className={`px-3 py-1.5 rounded text-xs ${
+                            recommentLoading[`${activeCommentsPost._id}-${comment._id}`]
+                              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
+                        >
+                          {recommentLoading[`${activeCommentsPost._id}-${comment._id}`] ? 'Posting...' : 'Post'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   </div>
-)}
+)} 
 
       {/* Followers / Following Modal */}
 {modalType && (

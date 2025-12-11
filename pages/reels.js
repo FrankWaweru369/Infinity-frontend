@@ -19,7 +19,8 @@ import {
   FiTrash2,
   FiWifi,
   FiWifiOff,
-  FiSettings
+  FiSettings,
+  FiChevronDown
 } from "react-icons/fi";
 import { FaHeart, FaPause, FaPlay } from "react-icons/fa";
 import { reelService } from "../services/reelService";
@@ -31,10 +32,11 @@ const API_BASE = config.apiUrl;
 const REELS_PER_PAGE = 5;
 const PRELOAD_THRESHOLD = 2; // Start loading when 2 reels from end
 
-// ====================
-// SHARED HELPER FUNCTION
-// ====================
 const getCurrentUserId = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
   try {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -60,7 +62,6 @@ const getCurrentUserId = () => {
     return null;
   }
 };
-// ====================
 
 // Helper function
 const getAuthHeaders = () => {
@@ -182,8 +183,6 @@ export default function ReelsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [reelToDelete, setReelToDelete] = useState(null);
   const currentUserId = getCurrentUserId();
-  
-  // New state for data saver and infinite scroll
   const [dataSaverMode, setDataSaverMode] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -191,7 +190,9 @@ export default function ReelsPage() {
   const [loadedVideoUrls, setLoadedVideoUrls] = useState({});
   const [showDataSaverMenu, setShowDataSaverMenu] = useState(false);
   const [videoQuality, setVideoQuality] = useState('auto');
-
+  const [expandedComments, setExpandedComments] = useState({});
+  const [recommentInputs, setRecommentInputs] = useState({});
+  const [recommentLoading, setRecommentLoading] = useState({});
   const videoRefs = useRef([]);
   const touchStartY = useRef(null);
   const fileInputRef = useRef(null);
@@ -285,7 +286,6 @@ const fetchReels = useCallback(async (filterType = 'foryou', pageNum = 1, should
       }
 
       // First, try to get ALL reels to filter (temporary solution)
-      // Ideally, backend should have /reels/my endpoint
       const allReels = await reelService.getReels(1, 100); // Get many reels
       
       if (allReels?.reels && Array.isArray(allReels.reels)) {
@@ -818,6 +818,278 @@ useEffect(() => {
       setUploadLoading(false);
     }
   };
+
+const handleLikeComment = async (commentId) => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    alert('Please login to like comments');
+    return;
+  }
+
+  try {
+    // Optimistic update
+    setSelectedReel(prev => {
+      if (!prev) return prev;
+
+      const updatedComments = prev.comments?.map(comment => {
+        if (comment._id === commentId) {
+          const isCurrentlyLiked = comment.likes?.some(like =>
+            String(like?._id || like) === String(userId)
+          );
+
+          return {
+            ...comment,
+            likes: isCurrentlyLiked
+              ? comment.likes?.filter(like =>
+                  String(like?._id || like) !== String(userId)
+                ) || []
+              : [...(comment.likes || []), userId],
+            likeCount: isCurrentlyLiked
+              ? (comment.likeCount || 1) - 1
+              : (comment.likeCount || 0) + 1
+          };
+        }
+        return comment;
+      });
+
+      return { ...prev, comments: updatedComments };
+    });
+
+    // Call API
+    const response = await axios.post(
+      `${API_BASE}/reels/${selectedReel._id}/comments/${commentId}/like`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+
+    // Update with real response
+    const updatedComment = response.data;
+
+    setSelectedReel(prev => {
+      if (!prev) return prev;
+
+      const updatedComments = prev.comments?.map(comment =>
+        comment._id === commentId ? updatedComment : comment
+      ) || [];
+
+      return { ...prev, comments: updatedComments };
+    });
+
+  } catch (error) {
+    console.error('Error liking comment:', error);
+    alert(`Failed to like comment: ${error.message}`);
+  }
+};
+
+const handleAddRecomment = async (commentId) => {
+  const text = recommentInputs[commentId]?.trim();
+  const userId = getCurrentUserId();
+  
+  if (!text || !userId) {
+    alert(!text ? 'Please enter recomment text' : 'Please login to recomment');
+    return;
+  }
+
+  setRecommentLoading(prev => ({ ...prev, [commentId]: true }));
+
+  try {
+    // Optimistic update - REMOVE TEMPORARY USER OBJECT
+    const tempRecommentId = `temp-${Date.now()}`;
+    setSelectedReel(prev => {
+      if (!prev) return prev;
+      
+      const updatedComments = prev.comments?.map(comment => {
+        if (comment._id === commentId) {
+          return {
+            ...comment,
+            recomments: [
+              ...(comment.recomments || []),
+              {
+                _id: tempRecommentId,
+                text,
+                user: userId, // Just store userId, not temporary object
+                likes: [],
+                likeCount: 0,
+                createdAt: new Date()
+              }
+            ],
+            recommentCount: (comment.recommentCount || 0) + 1
+          };
+        }
+        return comment;
+      });
+      
+      return { ...prev, comments: updatedComments };
+    });
+
+    // Call API
+    const response = await axios.post(
+      `${API_BASE}/reels/${selectedReel._id}/comments/${commentId}/recomment`,
+      { text },
+      { headers: getAuthHeaders() }
+    );
+
+    const newRecomment = response.data;
+
+    // Update with real data - FIXED
+    setSelectedReel(prev => {
+      if (!prev) return prev;
+      
+      const updatedComments = prev.comments?.map(comment => {
+        if (comment._id === commentId) {
+          // Remove temp recomment and add real one
+          const filteredRecomments = comment.recomments?.filter(recomment => 
+            recomment._id !== tempRecommentId
+          ) || [];
+          
+          return {
+            ...comment,
+            recomments: [...filteredRecomments, newRecomment],
+            recommentCount: (comment.recommentCount || 0) + 1
+          };
+        }
+        return comment;
+      });
+      
+      return { ...prev, comments: updatedComments };
+    });
+
+    // Also update main reels list
+    setReels(prev => prev.map(reel => {
+      if (reel._id === selectedReel._id) {
+        const updatedComments = reel.comments?.map(comment => {
+          if (comment._id === commentId) {
+            return {
+              ...comment,
+              recomments: [...(comment.recomments || []), newRecomment],
+              recommentCount: (comment.recommentCount || 0) + 1
+            };
+          }
+          return comment;
+        });
+        return { ...reel, comments: updatedComments };
+      }
+      return reel;
+    }));
+
+	      // Clear input and close
+    setRecommentInputs(prev => {
+      const newState = { ...prev };
+      delete newState[commentId];
+      return newState;
+    });
+
+    // Auto-expand
+    if (!expandedComments[commentId]) {
+      setExpandedComments(prev => ({ ...prev, [commentId]: true }));
+    }
+
+  } catch (error) {
+    console.error('Error adding recomment:', error);
+    alert(`Failed to add recomment: ${error.message}`);
+    
+    // Revert optimistic update on error
+    setSelectedReel(prev => {
+      if (!prev) return prev;
+      
+      const updatedComments = prev.comments?.map(comment => {
+        if (comment._id === commentId) {
+          return {
+            ...comment,
+            recomments: comment.recomments?.filter(recomment => 
+              !recomment._id.startsWith('temp-')
+            ) || [],
+            recommentCount: Math.max(0, (comment.recommentCount || 1) - 1)
+          };
+        }
+        return comment;
+      });
+      
+      return { ...prev, comments: updatedComments };
+    });
+  } finally {
+    setRecommentLoading(prev => ({ ...prev, [commentId]: false }));
+  }
+};
+
+const handleLikeRecomment = async (commentId, recommentId) => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    alert('Please login to like recomments');
+    return;
+  }
+
+  try {
+    // Optimistic update
+    setSelectedReel(prev => {
+      if (!prev) return prev;
+      
+      const updatedComments = prev.comments?.map(comment => {
+        if (comment._id === commentId) {
+          const updatedRecomments = comment.recomments?.map(recomment => {
+            if (recomment._id === recommentId) {
+              const isCurrentlyLiked = recomment.likes?.some(like => {
+                const likeId = typeof like === 'object' ? like?._id : like;
+                return String(likeId) === String(userId);
+              });
+              
+              return {
+                ...recomment,
+                likes: isCurrentlyLiked
+                  ? recomment.likes?.filter(like => {
+                      const likeId = typeof like === 'object' ? like?._id : like;
+                      return String(likeId) !== String(userId);
+                    }) || []
+                  : [...(recomment.likes || []), userId],
+                likeCount: isCurrentlyLiked 
+                  ? (recomment.likeCount || 1) - 1 
+                  : (recomment.likeCount || 0) + 1
+              };
+            }
+            return recomment;
+          });
+          
+          return { ...comment, recomments: updatedRecomments };
+        }
+        return comment;
+      });
+      
+      return { ...prev, comments: updatedComments };
+    });
+
+    // Call API
+    const response = await axios.post(
+      `${API_BASE}/reels/${selectedReel._id}/comments/${commentId}/recomments/${recommentId}/like`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+
+    const updatedRecomment = response.data;
+
+    // Update with real data
+    setSelectedReel(prev => {
+      if (!prev) return prev;
+      
+      const updatedComments = prev.comments?.map(comment => {
+        if (comment._id === commentId) {
+          return {
+            ...comment,
+            recomments: comment.recomments?.map(recomment => 
+              recomment._id === recommentId ? updatedRecomment : recomment
+            ) || []
+          };
+        }
+        return comment;
+      });
+      
+      return { ...prev, comments: updatedComments };
+    });
+
+  } catch (error) {
+    console.error('Error liking recomment:', error);
+    alert(`Failed to like recomment: ${error.message}`);
+  }
+};
 
   if (loading && reels.length === 0) {
     return (
@@ -1421,38 +1693,202 @@ useEffect(() => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
-            {selectedReel.comments && selectedReel.comments.length > 0 ? (
-              selectedReel.comments.map((comment, idx) => (
-                <div key={idx} className="flex space-x-3 mb-4">
-                  <img
-                    src={buildAssetUrl(comment.user?.profilePicture)}
-                    alt={comment.user?.username}
-                    className="w-8 h-8 rounded-full flex-shrink-0"
-                    onError={(e) => {
-                      e.target.src = `https://i.pravatar.cc/150?u=${comment.user?.username || 'unknown'}`;
-                    }}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-white font-semibold text-sm">
-                        {comment.user?.username}
-                      </span>
-                      <span className="text-gray-400 text-xs">
-                        {new Date(comment.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <p className="text-white text-sm">{comment.text}</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center text-gray-400 mt-8">
-                <FiMessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No comments yet</p>
-                <p className="text-sm">Be the first to comment!</p>
+  {selectedReel.comments && selectedReel.comments.length > 0 ? (
+    selectedReel.comments.map((comment, idx) => {
+      // Skip recomments (only show top-level comments)
+      if (comment.parentCommentId) return null;
+      
+      const isExpanded = expandedComments[comment._id];
+      const showRecommentInput = recommentInputs[comment._id] !== undefined;
+      const recommentText = recommentInputs[comment._id] || "";
+      const isLoading = recommentLoading[comment._id];
+      
+      return (
+        <div key={comment._id || idx} className="flex space-x-3 mb-6 pb-4 border-b border-gray-800 last:border-0">
+          <img
+            src={buildAssetUrl(comment.user?.profilePicture)}
+            alt={comment.user?.username}
+            className="w-8 h-8 rounded-full flex-shrink-0"
+            onError={(e) => {
+              e.target.src = `https://i.pravatar.cc/150?u=${comment.user?.username || 'unknown'}`;
+            }}
+          />
+          <div className="flex-1">
+            {/* User info */}
+            <div className="flex items-center space-x-2 mb-1">
+              <span className="text-white font-semibold text-sm">
+                {comment.user?.username}
+              </span>
+              <span className="text-gray-400 text-xs">
+                {new Date(comment.createdAt).toLocaleDateString()}
+              </span>
+            </div>
+            
+            {/* Comment text */}
+            <p className="text-white text-sm mb-3">{comment.text}</p>
+            
+            {/* COMMENT STATS AND ACTIONS */}
+            <div className="flex items-center space-x-4 mb-3">
+              {/* Like button */}
+              <button
+                onClick={() => handleLikeComment(comment._id)}
+                className="flex items-center space-x-1 text-gray-400 hover:text-white text-xs"
+              >
+                {comment.likes?.some(like => 
+                  String(like?._id || like) === String(getCurrentUserId())
+                ) ? (
+                  <FaHeart className="w-3 h-3 text-red-500" />
+                ) : (
+                  <FiHeart className="w-3 h-3" />
+                )}
+                <span>{comment.likeCount || 0}</span>
+              </button>
+              
+              {/* Recomment button */}
+              <button
+                onClick={() => {
+                  setRecommentInputs(prev => ({
+                    ...prev,
+                    [comment._id]: ""
+                  }));
+                }}
+                className="flex items-center space-x-1 text-gray-400 hover:text-white text-xs"
+              >
+                <FiMessageCircle className="w-3 h-3" />
+                <span>Recomment</span>
+                {comment.recommentCount > 0 && (
+                  <span className="text-gray-500 ml-1">({comment.recommentCount})</span>
+                )}
+              </button>
+              
+              {/* Show/Hide recomments toggle */}
+              {comment.recommentCount > 0 && (
+                <button
+                  onClick={() => {
+                    setExpandedComments(prev => ({
+                      ...prev,
+                      [comment._id]: !prev[comment._id]
+                    }));
+                  }}
+                  className="flex items-center space-x-1 text-gray-400 hover:text-white text-xs"
+                >
+                  <FiChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  <span>
+                    {isExpanded ? 'Hide' : 'Show'} {comment.recommentCount} 
+                    recomment{comment.recommentCount !== 1 ? 's' : ''}
+                  </span>
+                </button>
+              )}
+            </div>
+            
+            {/* RECOMMENT INPUT */}
+            {showRecommentInput && (
+              <div className="mt-3 flex space-x-2">
+                <input
+                  type="text"
+                  value={recommentText}
+                  onChange={(e) => setRecommentInputs(prev => ({
+                    ...prev,
+                    [comment._id]: e.target.value
+                  }))}
+                  placeholder="Write a recomment..."
+                  className="flex-1 bg-gray-800 border border-gray-600 rounded-full px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
+                  disabled={isLoading}
+                  onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleAddRecomment(comment._id)}
+                />
+                <button
+                  onClick={() => handleAddRecomment(comment._id)}
+                  disabled={isLoading || !recommentText.trim()}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-full text-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? 'Posting...' : 'Post'}
+                </button>
+                <button
+                  onClick={() => {
+                    setRecommentInputs(prev => {
+                      const newState = { ...prev };
+                      delete newState[comment._id];
+                      return newState;
+                    });
+                  }}
+                  className="bg-gray-700 text-white px-3 py-2 rounded-full text-sm hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
               </div>
             )}
+            
+            
+            {/* RECOMMENTS LIST (when expanded) */}
+{isExpanded && comment.recomments && comment.recomments.length > 0 && (
+  <div className="mt-4 ml-4 pl-3 border-l-2 border-gray-700">
+    <h4 className="text-gray-400 text-xs font-semibold mb-2">
+      {comment.recommentCount} Recomment{comment.recommentCount !== 1 ? 's' : ''}
+    </h4>
+    
+    {comment.recomments.map((recomment) => {
+      // Handle both user object and user ID string
+      const user = recomment.user;
+      const userId = typeof user === 'object' ? user?._id : user;
+      const username = typeof user === 'object' ? user?.username : 'Loading...';
+      const profilePicture = typeof user === 'object' ? user?.profilePicture : '';
+      
+      return (
+        <div key={recomment._id} className="mb-3">
+          <div className="flex space-x-2">
+            <img
+              src={buildAssetUrl(profilePicture)}
+              alt={username}
+              className="w-6 h-6 rounded-full flex-shrink-0"
+              onError={(e) => {
+                e.target.src = `https://i.pravatar.cc/150?u=${username || 'unknown'}`;
+              }}
+            />
+            <div className="flex-1">
+              <div className="flex items-center space-x-2 mb-1">
+                <span className="text-white font-semibold text-xs">
+                  {username}
+                </span>
+                <span className="text-gray-400 text-xs">
+                  {new Date(recomment.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <p className="text-white text-sm mb-1">{recomment.text}</p>
+              
+              {/* Recomment like button */}
+              <button
+                onClick={() => handleLikeRecomment(comment._id, recomment._id)}
+                className="flex items-center space-x-1 text-gray-400 hover:text-white text-xs"
+              >
+                {recomment.likes?.some(like => {
+                  const likeId = typeof like === 'object' ? like?._id : like;
+                  return String(likeId) === String(getCurrentUserId());
+                }) ? (
+                  <FaHeart className="w-2.5 h-2.5 text-red-500" />
+                ) : (
+                  <FiHeart className="w-2.5 h-2.5" />
+                )}
+                <span>{recomment.likeCount || 0}</span>
+              </button>
+            </div>
           </div>
+        </div>
+      );
+    })}
+  </div>
+)}
+          </div>
+        </div>
+      );
+    })
+  ) : (
+    <div className="text-center text-gray-400 mt-8">
+      <FiMessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+      <p>No comments yet</p>
+      <p className="text-sm">Be the first to comment!</p>
+    </div>
+  )}
+</div>
 
           <div className="p-4 border-t border-gray-700">
             <div className="flex space-x-2">
