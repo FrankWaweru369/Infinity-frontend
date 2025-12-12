@@ -441,7 +441,7 @@ const toggleLikesList = (postId) => {
 };
 
 
-  // ✅ Add comment - UPDATED
+  // ✅ Add comment - FIXED VERSION
 const handleComment = async (postId) => {
   const text = commentInputs[postId];
   if (!text?.trim() || commentLoading[postId]) return;
@@ -449,6 +449,41 @@ const handleComment = async (postId) => {
   setCommentLoading(prev => ({ ...prev, [postId]: true }));
 
   try {
+    // Optimistic update - add comment immediately
+    const tempCommentId = `temp-${Date.now()}`;
+    const currentUser = getCurrentUserData();
+    
+    // Optimistically update posts
+    setPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        return {
+          ...post,
+          comments: [
+            ...(post.comments || []),
+            {
+              _id: tempCommentId,
+              text,
+              user: currentUser || {
+                _id: user?._id || user?.id,
+                username: user?.username || 'You',
+                profilePicture: user?.profilePicture
+              },
+              likes: [],
+              likeCount: 0,
+              recomments: [],
+              recommentCount: 0,
+              createdAt: new Date()
+            }
+          ]
+        };
+      }
+      return post;
+    }));
+
+    // Clear input immediately
+    setCommentInputs(prev => ({ ...prev, [postId]: "" }));
+
+    // API call
     const res = await fetch(`${API_BASE}/posts/${postId}/comment`, {
       method: "POST",
       headers: {
@@ -460,29 +495,40 @@ const handleComment = async (postId) => {
 
     const updated = await res.json();
 
+    if (res.ok) {
+      // Fetch fresh post data to get the real comment
+      const postRes = await fetch(`${API_BASE}/posts/${postId}`, {
+        headers: getAuthHeaders(),
+      });
 
-    const postRes = await fetch(`${API_BASE}/posts/${postId}`, {
-      headers: getAuthHeaders(),
-    });
-    
-    const fullPost = await postRes.json();
-    
-    setPosts((prev) =>
-      prev.map((p) =>
-        p._id === postId
-          ? fullPost
-          : p
-      )
-    );
-    
-    setCommentInputs({ ...commentInputs, [postId]: "" });
-    
+      const fullPost = await postRes.json();
 
-    if (activeCommentsPost && activeCommentsPost._id === postId) {
-      setActiveCommentsPost(fullPost);
+      // Replace optimistic update with real data
+      setPosts(prev => prev.map(p => 
+        p._id === postId ? fullPost : p
+      ));
+
+      // Update activeCommentsPost if open
+      if (activeCommentsPost && activeCommentsPost._id === postId) {
+        setActiveCommentsPost(fullPost);
+      }
     }
   } catch (err) {
     console.error("Comment error:", err);
+    
+    // Revert optimistic update on error
+    setPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        return {
+          ...post,
+          comments: (post.comments || []).filter(comment => !comment._id.startsWith('temp-'))
+        };
+      }
+      return post;
+    }));
+    
+    // Restore the comment text
+    setCommentInputs(prev => ({ ...prev, [postId]: text }));
   } finally {
     setCommentLoading(prev => ({ ...prev, [postId]: false }));
   }
