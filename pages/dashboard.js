@@ -276,11 +276,18 @@ export default function Dashboard() {
     }
   };
 
- const fetchPosts = async () => {
+// ✅ Fetch posts with proper population for immediate updates
+const fetchPosts = async () => {
   try {
-    const res = await fetch(`${API_BASE}/posts`, {
+    const timestamp = Date.now();
+    const res = await fetch(`${API_BASE}/posts?populate=comments.recomments&_=${timestamp}`, {
       headers: getAuthHeaders(),
+      cache: 'no-store'
     });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
 
     const data = await res.json();
 
@@ -288,28 +295,34 @@ export default function Dashboard() {
       const sorted = data.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
-      
-      // Process the data to ensure all fields exist
+
       const processedPosts = sorted.map(post => ({
         ...post,
-        comments: post.comments?.map(comment => ({
+        comments: (post.comments || []).map(comment => ({
           ...comment,
-          user: comment.user || { username: 'Unknown' },
-          likes: comment.likes || [],
+          user: comment.user || { 
+            _id: 'unknown', 
+            username: 'Unknown User', 
+            profilePicture: '' 
+          },
+          likes: Array.isArray(comment.likes) ? comment.likes : [],
           likeCount: comment.likeCount || 0,
-          recomments: comment.recomments?.map(recomment => ({
+          recomments: (comment.recomments || []).map(recomment => ({
             ...recomment,
-            user: recomment.user || { username: 'Unknown' },
-            likes: recomment.likes || [],
+            user: recomment.user || { 
+              _id: 'unknown', 
+              username: 'Unknown User', 
+              profilePicture: '' 
+            },
+            likes: Array.isArray(recomment.likes) ? recomment.likes : [],
             likeCount: recomment.likeCount || 0
-          })) || [],
-          recommentCount: comment.recommentCount || 0
-        })) || []
+          })),
+          recommentCount: comment.recommentCount || (comment.recomments?.length || 0)
+        }))
       }));
-      
+
       setPosts(processedPosts);
 
-      // Initialize likedPosts state
       if (user) {
         const likedPostsObj = {};
         processedPosts.forEach(post => {
@@ -319,9 +332,9 @@ export default function Dashboard() {
             userLiked = post.likes.some(like => {
               if (typeof like === 'string') {
                 return like === user._id || like === user.id;
-              } else if (like._id) {
+              } else if (like?._id) {
                 return like._id === user._id || like._id === user.id;
-              } else if (like.user?._id) {
+              } else if (like?.user?._id) {
                 return like.user._id === user._id || like.user._id === user.id;
               }
               return false;
@@ -333,9 +346,18 @@ export default function Dashboard() {
 
         setLikedPosts(likedPostsObj);
       }
+
+      if (activeCommentsPost) {
+        const updatedActivePost = processedPosts.find(p => p._id === activeCommentsPost._id);
+        if (updatedActivePost) {
+          setActiveCommentsPost(updatedActivePost);
+        }
+      }
+
+      return processedPosts;
     }
   } catch (err) {
-    alert("Error fetching posts: " + err.message);
+    // Silent error - don't disrupt user experience
   }
 }; 
 
@@ -440,7 +462,7 @@ const toggleLikesList = (postId) => {
   setLikesListOpenFor((prev) => (prev === postId ? null : postId));
 };
 
-  // ✅ Add comment - OPTIMISTIC UPDATE
+ // ✅ Add comment - Optimistic update with immediate feedback
 const handleComment = async (postId) => {
   const text = commentInputs[postId];
   if (!text?.trim() || commentLoading[postId]) return;
@@ -448,13 +470,14 @@ const handleComment = async (postId) => {
   setCommentLoading(prev => ({ ...prev, [postId]: true }));
 
   try {
-    // Clear input IMMEDIATELY
+    // 1. Clear input IMMEDIATELY
     setCommentInputs(prev => ({ ...prev, [postId]: "" }));
 
-    // OPTIMISTIC UPDATE: Add comment immediately
+    // 2. Create optimistic comment
     const tempCommentId = `temp-${Date.now()}`;
     const currentUser = getCurrentUserData();
-    
+
+    // 3. Optimistic update to show comment immediately
     setPosts(prev => prev.map(post => {
       if (post._id === postId) {
         return {
@@ -481,7 +504,7 @@ const handleComment = async (postId) => {
       return post;
     }));
 
-    // Make the API call
+    // 4. Make API call
     const res = await fetch(`${API_BASE}/posts/${postId}/comment`, {
       method: "POST",
       headers: {
@@ -491,47 +514,15 @@ const handleComment = async (postId) => {
       body: JSON.stringify({ text }),
     });
 
-    if (!res.ok) throw new Error("Comment failed");
-
-    // ✅ FIX: Fetch the FULL post WITH populated recomments
-    const postRes = await fetch(`${API_BASE}/posts/${postId}?populate=comments.recomments`, {
-      headers: getAuthHeaders(),
-    });
-
-    const fullPost = await postRes.json();
-
-    // ✅ PROCESS the fullPost to match your structure
-    const processedFullPost = {
-      ...fullPost,
-      comments: fullPost.comments?.map(comment => ({
-        ...comment,
-        user: comment.user || { username: 'Unknown' },
-        likes: comment.likes || [],
-        likeCount: comment.likeCount || 0,
-        recomments: comment.recomments?.map(recomment => ({
-          ...recomment,
-          user: recomment.user || { username: 'Unknown' },
-          likes: recomment.likes || [],
-          likeCount: recomment.likeCount || 0
-        })) || [],
-        recommentCount: comment.recommentCount || 0
-      })) || []
-    };
-
-    // Replace optimistic update with real data
-    setPosts(prev => prev.map(p => 
-      p._id === postId ? processedFullPost : p
-    ));
-
-    // Update activeCommentsPost
-    if (activeCommentsPost && activeCommentsPost._id === postId) {
-      setActiveCommentsPost(processedFullPost);
+    if (!res.ok) {
+      throw new Error("Comment failed");
     }
 
+    // 5. Refetch posts to get updated data with proper structure
+    await fetchPosts();
+
   } catch (err) {
-    console.error("Comment error:", err);
-    
-    // Revert optimistic update on error
+    // 6. Revert optimistic update on error
     setPosts(prev => prev.map(post => {
       if (post._id === postId) {
         return {
@@ -549,7 +540,7 @@ const handleComment = async (postId) => {
   } finally {
     setCommentLoading(prev => ({ ...prev, [postId]: false }));
   }
-};
+}; 
 
   // --- Edit Post ---
   const handleEdit = (post) => {
