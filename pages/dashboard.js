@@ -447,44 +447,41 @@ const handleComment = async (postId) => {
 
   setCommentLoading(prev => ({ ...prev, [postId]: true }));
 
-  // 1. Clear input IMMEDIATELY
-  setCommentInputs(prev => ({ ...prev, [postId]: "" }));
-
-  // 2. Create temporary comment ID for optimistic update
-  const tempCommentId = `temp-${Date.now()}`;
-  
-  // 3. Get current user data for optimistic comment
-  const currentUserData = {
-    _id: user?._id || user?.id,
-    username: user?.username || "You",
-    profilePicture: user?.profilePicture
-  };
-
-  // 4. OPTIMISTIC UPDATE: Add comment to UI immediately
-  setPosts(prev => prev.map(post => {
-    if (post._id === postId) {
-      return {
-        ...post,
-        comments: [
-          ...(post.comments || []),
-          {
-            _id: tempCommentId,
-            text,
-            user: currentUserData,
-            likes: [],
-            likeCount: 0,
-            recomments: [],
-            recommentCount: 0,
-            createdAt: new Date().toISOString()
-          }
-        ]
-      };
-    }
-    return post;
-  }));
-
   try {
-    // 5. Make the actual API call
+    // Clear input IMMEDIATELY
+    setCommentInputs(prev => ({ ...prev, [postId]: "" }));
+
+    // OPTIMISTIC UPDATE: Add comment immediately
+    const tempCommentId = `temp-${Date.now()}`;
+    const currentUser = getCurrentUserData();
+    
+    setPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        return {
+          ...post,
+          comments: [
+            ...(post.comments || []),
+            {
+              _id: tempCommentId,
+              text,
+              user: currentUser || {
+                _id: user?._id || user?.id,
+                username: user?.username || 'You',
+                profilePicture: user?.profilePicture
+              },
+              likes: [],
+              likeCount: 0,
+              recomments: [],
+              recommentCount: 0,
+              createdAt: new Date().toISOString()
+            }
+          ]
+        };
+      }
+      return post;
+    }));
+
+    // Make the API call
     const res = await fetch(`${API_BASE}/posts/${postId}/comment`, {
       method: "POST",
       headers: {
@@ -494,63 +491,61 @@ const handleComment = async (postId) => {
       body: JSON.stringify({ text }),
     });
 
-    if (!res.ok) {
-      throw new Error("Comment failed");
-    }
+    if (!res.ok) throw new Error("Comment failed");
 
-    const responseData = await res.json();
-
-    // 6. Fetch the updated post to get the real comment with proper ID
-    const postRes = await fetch(`${API_BASE}/posts/${postId}`, {
+    // ✅ FIX: Fetch the FULL post WITH populated recomments
+    const postRes = await fetch(`${API_BASE}/posts/${postId}?populate=comments.recomments`, {
       headers: getAuthHeaders(),
     });
-    
-    const updatedPost = await postRes.json();
 
-    // 7. Replace optimistic update with real data
-    setPosts(prev => prev.map(post => {
-      if (post._id === postId) {
-        // Process the comments to ensure consistent structure
-        const processedComments = updatedPost.comments?.map(comment => ({
-          ...comment,
-          user: comment.user || { username: 'Unknown' },
-          likes: comment.likes || [],
-          likeCount: comment.likeCount || 0,
-          recomments: comment.recomments?.map(recomment => ({
-            ...recomment,
-            user: recomment.user || { username: 'Unknown' },
-            likes: recomment.likes || [],
-            likeCount: recomment.likeCount || 0
-          })) || [],
-          recommentCount: comment.recommentCount || 0
-        })) || [];
-        
-        return {
-          ...updatedPost,
-          comments: processedComments
-        };
-      }
-      return post;
-    }));
+    const fullPost = await postRes.json();
+
+    // ✅ PROCESS the fullPost to match your structure
+    const processedFullPost = {
+      ...fullPost,
+      comments: fullPost.comments?.map(comment => ({
+        ...comment,
+        user: comment.user || { username: 'Unknown' },
+        likes: comment.likes || [],
+        likeCount: comment.likeCount || 0,
+        recomments: comment.recomments?.map(recomment => ({
+          ...recomment,
+          user: recomment.user || { username: 'Unknown' },
+          likes: recomment.likes || [],
+          likeCount: recomment.likeCount || 0
+        })) || [],
+        recommentCount: comment.recommentCount || 0
+      })) || []
+    };
+
+    // Replace optimistic update with real data
+    setPosts(prev => prev.map(p => 
+      p._id === postId ? processedFullPost : p
+    ));
+
+    // Update activeCommentsPost
+    if (activeCommentsPost && activeCommentsPost._id === postId) {
+      setActiveCommentsPost(processedFullPost);
+    }
 
   } catch (err) {
     console.error("Comment error:", err);
     
-    // 8. REVERT optimistic update on error
+    // Revert optimistic update on error
     setPosts(prev => prev.map(post => {
       if (post._id === postId) {
         return {
           ...post,
-          comments: (post.comments || []).filter(comment => comment._id !== tempCommentId)
+          comments: (post.comments || []).filter(comment => 
+            !comment._id.startsWith('temp-')
+          )
         };
       }
       return post;
     }));
     
-    // Restore the comment text so user can try again
+    // Restore the comment text
     setCommentInputs(prev => ({ ...prev, [postId]: text }));
-    
-    alert("Failed to post comment. Please try again.");
   } finally {
     setCommentLoading(prev => ({ ...prev, [postId]: false }));
   }
