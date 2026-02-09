@@ -22,6 +22,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "axios": "^1.13.2",
     "chart.js": "^3.9.1",
     "lucide-react": "^0.552.0",

@@ -1,4 +1,3 @@
-import { useTheme } from '../../context/ThemeContext';
 import { useRouter } from "next/router";
 import { usePosts } from "../../context/PostsContext";
 import config from '../../src/config';
@@ -32,7 +31,6 @@ import FullImageModal from "../../components/FullImageModal";
 const API_BASE = config.apiUrl;
 
 export default function ProfilePage() {
-  const { isDarkMode } = useTheme(); // Add dark mode support
   const router = useRouter();
   const { username } = router.query;
   const postsContext = usePosts();
@@ -121,14 +119,20 @@ useEffect(() => {
     }
   };
 
+  const handleScroll = () => {
+    closeModal();
+  };
+
   if (modalType) {
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('scroll', handleScroll, true);
   }
 
   return () => {
     document.removeEventListener('mousedown', handleClickOutside);
     document.removeEventListener('touchstart', handleClickOutside);
+    document.removeEventListener('scroll', handleScroll, true);
   };
 }, [modalType]);
 
@@ -1280,9 +1284,9 @@ const getAvatar = (src, username, size = 8) => {
   if (!user) return <p className="p-5 text-center">User not found</p>;
 
   return (
-        <div className="min-h-screen bg-gray-50 dark:bg-infinityBgDark pb-6">
+        <div className="min-h-screen bg-gray-50 pb-6">
   {/* Top Bar */}
-<div className="flex items-center justify-between bg-white dark:bg-gray-900 p-4 shadow-md sticky top-0 z-20">
+<div className="flex items-center justify-between bg-white p-4 shadow-md sticky top-0 z-20">
   <button
     onClick={() => router.push("/dashboard")}
     className="flex items-center text-purple-600 font-semibold hover:underline"
@@ -1295,7 +1299,7 @@ const getAvatar = (src, username, size = 8) => {
 </div>
 
 {/* Profile Header */}
-<div className="relative bg-white dark:bg-gray-900 shadow-md rounded-lg overflow-visible mt-1 animate-fadeIn">
+<div className="relative bg-white shadow-md rounded-lg overflow-visible mt-1 animate-fadeIn">
 
   {/* Main Container with Cover Photo Background */}
   <div className="relative rounded-t-lg overflow-hidden">
@@ -1478,12 +1482,11 @@ const getAvatar = (src, username, size = 8) => {
 </div>	
 
 {/* About Section */}
-<div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-2xl mt-1 border border-gray-100 dark:border-gray-700">
-
-	<div className="flex justify-between items-center mb-4">
+<div className="bg-white p-6 shadow-md rounded-2xl mt-1 border border-gray-100">
+  <div className="flex justify-between items-center mb-4">
     <div className="flex items-center gap-2">
-      <UserCircle className="text-purple-600 dark:text-infinityPurpleDark" size={22} />
-      <h2 className="font-semibold text-lg text-gray-800 dark:text-infinityTextDark">About</h2>
+      <UserCircle className="text-purple-600" size={22} />
+      <h2 className="font-semibold text-lg text-gray-800">About</h2>
     </div>
 
     {/* Edit Profile button (only visible to profile owner) */}
@@ -1498,7 +1501,7 @@ const getAvatar = (src, username, size = 8) => {
     )}
   </div>
 
-  <div className="space-y-3 text-gray-700 dark:text-infinityTextDark">
+  <div className="space-y-3 text-gray-700">
     {user.fullName && (
       <p className="flex items-center gap-2">
         <User className="text-purple-500" size={18} />
@@ -1579,7 +1582,7 @@ const getAvatar = (src, username, size = 8) => {
 	  {/* Edit Profile Modal */}
 {isEditingProfile && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 animate-fadeIn">
-    <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-2xl p-6 w-96 shadow-xl relative border border-gray-100 animate-scaleIn">
+    <div className="bg-white rounded-2xl p-6 w-96 shadow-xl relative border border-gray-100 animate-scaleIn">
       
       {/* Close Button */}
       <button
@@ -1591,7 +1594,7 @@ const getAvatar = (src, username, size = 8) => {
 
       {/* Title */}
       <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center gap-2">
-        <FiUser className="text-purple-600 dark:text-infinityPurpleDark" />
+        <FiUser className="text-purple-600" />
         Edit Profile
       </h2>
 
@@ -1608,7 +1611,7 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, fullName: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
           />
         </div>
 
@@ -1624,7 +1627,7 @@ const getAvatar = (src, username, size = 8) => {
               setEditData({ ...editData, bio: e.target.value })
             }
             rows="3"
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none"
           />
         </div>
 
@@ -1638,7 +1641,7 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, gender: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
           >
             <option value="">Select gender</option>
             <option value="male">Male</option>
@@ -1658,7 +1661,7 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, dob: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
           />
         </div>
 
@@ -1674,7 +1677,7 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, location: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
           />
         </div>
 
@@ -1690,7 +1693,7 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, website: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
           />
         </div>
 
@@ -1706,7 +1709,7 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, phone: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
           />
         </div>
       </div>
@@ -1749,7 +1752,7 @@ const getAvatar = (src, username, size = 8) => {
         {postsLoading ? (
           <p>Loading posts...</p>
         ) : userPosts.length === 0 ? (
-          <p className="text-center text-gray-500 dark:text-infinityTextSecondaryDark">No posts yet.</p>
+          <p className="text-center text-gray-500">No posts yet.</p>
         ) : (
           userPosts.map((post) => {
             const postId = post._id;
@@ -1757,8 +1760,8 @@ const getAvatar = (src, username, size = 8) => {
               Array.isArray(post.likes) &&
               post.likes.some((u) => (u && u._id ? u._id === currentUserId : u === currentUserId));
             return (
-              <div key={postId} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">              
-		    {/* Header */}
+              <div key={postId} className="bg-white rounded-lg shadow-sm p-4">
+                {/* Header */}
                 <div className="flex items-start justify-between">
                   <div
                     className="flex items-center space-x-3 mb-3 cursor-pointer"
@@ -1768,7 +1771,7 @@ const getAvatar = (src, username, size = 8) => {
                     <span className="font-semibold">{post.author?.username ?? "unknown"}</span>
                   </div>
 
-                  <div className="text-sm text-gray-500 dark:text-infinityTextSecondaryDark">
+                  <div className="text-sm text-gray-500">
                     {post.createdAt ? new Date(post.createdAt).toLocaleString() : ""}
                   </div>
                 </div>
@@ -1810,49 +1813,49 @@ const getAvatar = (src, username, size = 8) => {
 
                  {/* Likes list dropdown/modal - Simplified with gray background */}
 {likesListOpenFor === post._id && (
-  <div className="absolute left-4 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg p-3 w-60 z-50">
+  <div className="absolute left-4 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-3 w-60 z-50">
     {/* Header with subtle gray background */}
-    <div className="text-sm font-semibold mb-3 pb-2 border-b border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded-t">
+    <div className="text-sm font-semibold mb-3 pb-2 border-b border-gray-200 text-gray-800 bg-gray-50 px-2 py-1 rounded-t">
       Liked by ({post.likes?.length || 0})
     </div>
     
     {/* List with alternating background for better separation */}
-    <div className="max-h-48 overflow-y-auto bg-gray-50/30 dark:bg-gray-900/30 rounded">
+    <div className="max-h-48 overflow-y-auto bg-gray-50/30 rounded">
       {post.likes && post.likes.length ? (
         post.likes.map((u, index) => (
           <a
             key={u._id}
             href={`/profile/${u.username}`}
             className={`flex items-center space-x-3 p-2 transition ${
-              index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'
+              index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
             } ${
-              index !== post.likes.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''
-            } hover:bg-purple-50 dark:hover:bg-gray-700`}
+              index !== post.likes.length - 1 ? 'border-b border-gray-100' : ''
+            } hover:bg-purple-50`}
           >
             {/* Avatar with border */}
-            <div className="w-8 h-8 rounded-full border-2 border-purple-200 dark:border-purple-800 overflow-hidden bg-white dark:bg-gray-800">
+            <div className="w-8 h-8 rounded-full border-2 border-purple-200 overflow-hidden bg-white">
               {getAvatar(imageUrl(u.profilePicture), u.username, 8)}
             </div>
             
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-100">{u.username}</span>
+            <span className="text-sm font-medium text-gray-700">{u.username}</span>
           </a>
         ))
       ) : (
-        <div className="py-6 text-center bg-white dark:bg-gray-800 rounded">
-          <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-900 flex items-center justify-center mx-auto mb-2">
-            <FiHeart className="w-5 h-5 text-gray-400 dark:text-gray-400" />
+        <div className="py-6 text-center bg-white rounded">
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+            <FiHeart className="w-5 h-5 text-gray-400" />
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-300">No likes yet</p>
-          <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">Be the first to like</p>
+          <p className="text-sm text-gray-500">No likes yet</p>
+          <p className="text-xs text-gray-400 mt-1">Be the first to like</p>
         </div>
       )}
     </div>
     
     {/* Footer with subtle gray background */}
-    <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 text-right bg-gray-50/50 dark:bg-gray-900/50 px-2 py-1 rounded-b">
+    <div className="mt-3 pt-2 border-t border-gray-200 text-right bg-gray-50/50 px-2 py-1 rounded-b">
       <button
         onClick={() => setLikesListOpenFor(null)}
-        className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-1"
+        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
       >
         Close
       </button>
@@ -1883,17 +1886,17 @@ const getAvatar = (src, username, size = 8) => {
     {menuOpenFor === post._id && (
       <div
         ref={dropdownRef}
-        className="absolute right-0 mt-2 w-24 bg-white dark:bg-gray-900 border rounded shadow-md z-50"
+        className="absolute right-0 mt-2 w-24 bg-white border rounded shadow-md z-50"
       >
         <button
           onClick={() => handleEdit(post)}
-          className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
+          className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100"
         >
           Edit
         </button>
         <button
           onClick={() => handleDelete(post._id)} 
-          className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
+          className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100"
         >
           Delete
         </button>
@@ -1915,43 +1918,43 @@ const getAvatar = (src, username, size = 8) => {
         const avatarSrc = imageUrl(c.user?.profilePicture);
         const text = c.text ?? c;
         return (
-          <div
-            key={i}
-            className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700"
-          >
-            {/* Avatar */}
-            <a href={`/profile/${c.user.username}`}>
-              {getAvatar(avatarSrc, username, 8)}
-            </a>
+  <div
+    key={i}
+    className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50"
+  >
+    {/* Avatar */}
+    <a href={`/profile/${c.user.username}`}>
+      {getAvatar(avatarSrc, username, 8)}
+    </a>
 
-            {/* Username + Comment */}
-            <div className="flex flex-col">
-              <a
-                href={`/profile/${c.user.username}`}
-                className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-100"
-              >
-                {username}
-              </a>
-              <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-200 dark:border-purple-700">
-                {text}
-              </p>
-            </div>
-          </div>
-        );
+    {/* Username + Comment */}
+    <div className="flex flex-col">
+      <a
+        href={`/profile/${c.user.username}`}
+        className="font-semibold text-sm hover:underline text-gray-800"
+      >
+        {username}
+      </a>
+      <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200">
+        {text}
+      </p>
+    </div>
+  </div>
+);
       })}
 
       {/* View all comments button */}
       {post.comments.length > 1 && (
         <button
           onClick={() => setActiveCommentsPost(post)}
-          className="text-xs text-purple-600 hover:underline focus:outline-none dark:text-purple-400 dark:hover:text-purple-300"
+          className="text-xs text-purple-600 hover:underline focus:outline-none"
         >
           View all {post.comments.length} comments
         </button>
       )}
     </>
   ) : (
-    <p className="text-sm text-gray-400 dark:text-gray-400">No comments yet</p>
+    <p className="text-sm text-gray-400">No comments yet</p>
   )}
 
   {/* Comment input */}
@@ -1966,19 +1969,19 @@ const getAvatar = (src, username, size = 8) => {
         })
       }
       placeholder="Add a comment..."
-      className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+      className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
     />
     <button
-      onClick={() => handleComment(post._id)}
-      disabled={commentLoading[post._id]}
-      className={`px-3 py-1 rounded ${
-        commentLoading[post._id]
-          ? "bg-gray-400 text-gray-200 cursor-not-allowed dark:bg-gray-600 dark:text-gray-300"
-          : "bg-purple-600 text-white hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 dark:text-gray-100"
-      }`}
-    >
-      {commentLoading[post._id] ? "Posting..." : "Post"}
-    </button>
+  onClick={() => handleComment(post._id)}
+  disabled={commentLoading[post._id]}
+  className={`px-3 py-1 rounded ${
+    commentLoading[post._id] 
+      ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+      : "bg-purple-600 text-white hover:bg-purple-700"
+  }`}
+>
+  {commentLoading[post._id] ? "Posting..." : "Post"}
+</button>
   </div>
 </div>
 </div>
@@ -1990,7 +1993,7 @@ const getAvatar = (src, username, size = 8) => {
    
                   {editPost && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 p-4 rounded-lg shadow-lg w-80 relative">
+    <div className="bg-white p-4 rounded-lg shadow-lg w-80 relative">
       {/* Close Button */}
       <button
         onClick={() => {
@@ -2041,7 +2044,7 @@ const getAvatar = (src, username, size = 8) => {
               setEditImage(null);
               setPreviewImage(null);
             }}
-            className="absolute top-2 right-2 bg-white dark:bg-gray-900 bg-opacity-70 rounded-full p-1 text-red-500 hover:bg-opacity-100"
+            className="absolute top-2 right-2 bg-white bg-opacity-70 rounded-full p-1 text-red-500 hover:bg-opacity-100"
           >
             <FiX />
           </button>
@@ -2055,7 +2058,7 @@ const getAvatar = (src, username, size = 8) => {
       {!editPost?.image && !previewImage && (
         <div className="mb-3 p-4 border border-dashed border-gray-300 rounded-lg text-center">
           <FiImage className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-sm text-gray-500 dark:text-infinityTextSecondaryDark">No image in this post</p>
+          <p className="text-sm text-gray-500">No image in this post</p>
         </div>
       )}
 
@@ -2119,14 +2122,14 @@ const getAvatar = (src, username, size = 8) => {
                  {/* Enhanced Comments Modal */}
 {activeCommentsPost && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white dark:bg-gray-800 w-96 max-h-[80vh] overflow-y-auto rounded-lg p-4 relative shadow-lg">
+    <div className="bg-white w-96 max-h-[80vh] overflow-y-auto rounded-lg p-4 relative shadow-lg">
       <button
         onClick={() => setActiveCommentsPost(null)}
-        className="absolute top-2 right-2 text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-gray-100"
+        className="absolute top-2 right-2 text-gray-600 hover:text-black"
       >
         <FiX className="w-5 h-5" />
       </button>
-      <h2 className="font-bold text-lg mb-3 dark:text-gray-100">
+      <h2 className="font-bold text-lg mb-3">
         Comments ({activeCommentsPost.comments?.length || 0})
       </h2>
 
@@ -2135,13 +2138,13 @@ const getAvatar = (src, username, size = 8) => {
           const username = comment.user?.username || 'User';
           const avatarSrc = imageUrl(comment.user?.profilePicture);
           const userId = getCurrentUserId();
-          const isCommentLiked = comment.likes?.some(like =>
+          const isCommentLiked = comment.likes?.some(like => 
             String(like._id || like) === String(userId)
           );
           const isExpanded = expandedComments[`${activeCommentsPost._id}-${comment._id}`];
 
           return (
-            <div key={comment._id} className="border-b pb-3 dark:border-gray-700">
+            <div key={comment._id} className="border-b pb-3">
               {/* Main Comment */}
               <div className="flex items-start space-x-3 mb-2">
                 {/* Avatar */}
@@ -2155,35 +2158,35 @@ const getAvatar = (src, username, size = 8) => {
                     <div>
                       <a
                         href={`/profile/${comment.user?.username}`}
-                        className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-100"
+                        className="font-semibold text-sm hover:underline text-gray-800"
                       >
                         {username}
                       </a>
-                      <span className="text-xs text-gray-500 ml-2 dark:text-gray-400">
+                      <span className="text-xs text-gray-500 ml-2">
                         {new Date(comment.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                     {/* Comment Like Button */}
                     <button
                       onClick={() => handleLikeComment(activeCommentsPost._id, comment._id)}
-                      className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs dark:text-gray-400 dark:hover:text-red-400"
+                      className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs"
                     >
                       {isCommentLiked ? (
-                        <FaHeart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
+                        <FaHeart className="w-3.5 h-3.5 text-red-500" />
                       ) : (
                         <FiHeart className="w-3.5 h-3.5" />
                       )}
-                      <span className="dark:text-gray-100">{comment.likeCount || 0}</span>
+                      <span>{comment.likeCount || 0}</span>
                     </button>
                   </div>
-
-                  <p className="text-gray-700 text-sm mt-1 dark:text-gray-100">{comment.text}</p>
+                  
+                  <p className="text-gray-700 text-sm mt-1">{comment.text}</p>
 
                   {/* Recomment Button */}
                   <div className="flex items-center space-x-4 mt-2">
                     <button
                       onClick={() => toggleCommentExpansion(activeCommentsPost._id, comment._id)}
-                      className="text-xs text-purple-600 hover:underline dark:text-purple-400 dark:hover:text-purple-300"
+                      className="text-xs text-purple-600 hover:underline"
                     >
                       {comment.recommentCount || 0} Recomment{comment.recommentCount !== 1 ? 's' : ''}
                     </button>
@@ -2198,98 +2201,98 @@ const getAvatar = (src, username, size = 8) => {
                           [`${activeCommentsPost._id}-${comment._id}`]: true
                         }));
                       }}
-                      className="text-xs text-gray-500 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300"
+                      className="text-xs text-gray-500 hover:text-purple-600"
                     >
                       Reply
                     </button>
                   </div>
 
-                 {/* Recomments Section */}
-{isExpanded && (
-  <div className="mt-3 ml-4 pl-3 border-l-2 border-gray-300 dark:border-gray-700">
-    {/* Show existing recomments */}
-    {comment.recomments && comment.recomments.length > 0 && (
-      <div className="space-y-2 mb-3">
-        {comment.recomments.map((recomment) => {
-          const recommentUsername = recomment.user?.username || 'User';
-          const recommentAvatarSrc = imageUrl(recomment.user?.profilePicture);
-          const isRecommentLiked = recomment.likes?.some(like =>
-            String(like._id || like) === String(userId)
-          );
+                  {/* Recomments Section */}
+                  {isExpanded && (
+                    <div className="mt-3 ml-4 pl-3 border-l-2 border-gray-300">
+                      {/* Show existing recomments */}
+                      {comment.recomments && comment.recomments.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          {comment.recomments.map((recomment) => {
+                            const recommentUsername = recomment.user?.username || 'User';
+                            const recommentAvatarSrc = imageUrl(recomment.user?.profilePicture);
+                            const isRecommentLiked = recomment.likes?.some(like => 
+                              String(like._id || like) === String(userId)
+                            );
 
-          return (
-            <div key={recomment._id} className="flex items-start space-x-2">
-              <img
-                src={recommentAvatarSrc || `https://i.pravatar.cc/150?u=${recommentUsername}`}
-                alt={recommentUsername}
-                className="w-5 h-5 rounded-full flex-shrink-0 border border-gray-200 dark:border-gray-600"
-                onError={(e) => {
-                  e.target.src = `https://i.pravatar.cc/150?u=${recommentUsername || 'unknown'}`;
-                }}
-              />
-              <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-1">
-                  <span className="text-gray-800 font-semibold text-xs dark:text-gray-100">
-                    {recommentUsername}
-                  </span>
-                  <span className="text-gray-400 text-xs dark:text-gray-400">
-                    {new Date(recomment.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <p className="text-gray-700 text-xs mb-1 dark:text-gray-100">{recomment.text}</p>
+                            return (
+                              <div key={recomment._id} className="flex items-start space-x-2">
+                                <img
+                                  src={recommentAvatarSrc || `https://i.pravatar.cc/150?u=${recommentUsername}`}
+                                  alt={recommentUsername}
+                                  className="w-5 h-5 rounded-full flex-shrink-0"
+                                  onError={(e) => {
+                                    e.target.src = `https://i.pravatar.cc/150?u=${recommentUsername || 'unknown'}`;
+                                  }}
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <span className="text-gray-800 font-semibold text-xs">
+                                      {recommentUsername}
+                                    </span>
+                                    <span className="text-gray-400 text-xs">
+                                      {new Date(recomment.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-700 text-xs mb-1">{recomment.text}</p>
+                                  
+                                  {/* Recomment Like Button */}
+                                  <button
+                                    onClick={() => handleLikeRecomment(activeCommentsPost._id, comment._id, recomment._id)}
+                                    className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs"
+                                  >
+                                    {isRecommentLiked ? (
+                                      <FaHeart className="w-3 h-3 text-red-500" />
+                                    ) : (
+                                      <FiHeart className="w-3 h-3" />
+                                    )}
+                                    <span>{recomment.likeCount || 0}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
-                {/* Recomment Like Button */}
-                <button
-                  onClick={() => handleLikeRecomment(activeCommentsPost._id, comment._id, recomment._id)}
-                  className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs dark:text-gray-400 dark:hover:text-red-400"
-                >
-                  {isRecommentLiked ? (
-                    <FaHeart className="w-3 h-3 text-red-500 dark:text-red-400" />
-                  ) : (
-                    <FiHeart className="w-3 h-3" />
+                      {/* Add Recomment Input */}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          value={recommentInputs[`${activeCommentsPost._id}-${comment._id}`] || ''}
+                          onChange={(e) =>
+                            setRecommentInputs({
+                              ...recommentInputs,
+                              [`${activeCommentsPost._id}-${comment._id}`]: e.target.value
+                            })
+                          }
+                          placeholder="Write a recomment..."
+                          className="flex-1 border rounded-md p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddRecomment(activeCommentsPost._id, comment._id);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleAddRecomment(activeCommentsPost._id, comment._id)}
+                          disabled={recommentLoading[`${activeCommentsPost._id}-${comment._id}`]}
+                          className={`px-3 py-1.5 rounded text-xs ${
+                            recommentLoading[`${activeCommentsPost._id}-${comment._id}`]
+                              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
+                        >
+                          {recommentLoading[`${activeCommentsPost._id}-${comment._id}`] ? 'Posting...' : 'Post'}
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <span className="dark:text-gray-100">{recomment.likeCount || 0}</span>
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-
-    {/* Add Recomment Input */}
-    <div className="flex items-center space-x-2">
-      <input
-        type="text"
-        value={recommentInputs[`${activeCommentsPost._id}-${comment._id}`] || ''}
-        onChange={(e) =>
-          setRecommentInputs({
-            ...recommentInputs,
-            [`${activeCommentsPost._id}-${comment._id}`]: e.target.value
-          })
-        }
-        placeholder="Write a recomment..."
-        className="flex-1 border rounded-md p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
-        onKeyPress={(e) => {
-          if (e.key === 'Enter') {
-            handleAddRecomment(activeCommentsPost._id, comment._id);
-          }
-        }}
-      />
-      <button
-        onClick={() => handleAddRecomment(activeCommentsPost._id, comment._id)}
-        disabled={recommentLoading[`${activeCommentsPost._id}-${comment._id}`]}
-        className={`px-3 py-1.5 rounded text-xs ${
-          recommentLoading[`${activeCommentsPost._id}-${comment._id}`]
-            ? 'bg-gray-400 text-gray-200 cursor-not-allowed dark:bg-gray-600 dark:text-gray-300'
-            : 'bg-purple-600 text-white hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 dark:text-gray-100'
-        }`}
-      >
-        {recommentLoading[`${activeCommentsPost._id}-${comment._id}`] ? 'Posting...' : 'Post'}
-      </button>
-    </div>
-  </div>
-)} 
                 </div>
               </div>
             </div>
@@ -2303,7 +2306,7 @@ const getAvatar = (src, username, size = 8) => {
       {/* Followers / Following Modal */}
 {modalType && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-    <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 w-80 rounded-lg shadow-lg p-4 relative"ref={modalRef}>
+    <div className="bg-white w-80 rounded-lg shadow-lg p-4 relative"ref={modalRef}>
       {/* Close button */}
       <button
         onClick={closeModal}
@@ -2357,7 +2360,7 @@ const getAvatar = (src, username, size = 8) => {
                   }}
                   className={`text-sm px-3 py-1 rounded-lg border transition ${
                     user.following?.some(f => f._id === u._id)
-                      ? "border-gray-300 text-gray-700 hover:bg-gray-100 dark:bg-gray-800"
+                      ? "border-gray-300 text-gray-700 hover:bg-gray-100"
                       : "border-purple-500 text-purple-600 hover:bg-purple-100"
                   }`}
                 >
@@ -2379,15 +2382,15 @@ const getAvatar = (src, username, size = 8) => {
   />
 )}
 
-  {/* Bottom Navbar */}
-<div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 flex justify-around items-center py-1">
+  {/* bottom navbar */}
+<div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 flex justify-around items-center py-1">
   {/* Home */}
   <div
     onClick={() => router.push("/dashboard")}
     className={`flex flex-col items-center transition cursor-pointer ${
       router.pathname === "/dashboard"
-        ? "text-purple-600 dark:text-purple-400"
-        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
+        ? "text-purple-600"
+        : "text-gray-700 hover:text-purple-600"
     }`}
   >
     <FiHome className="w-5 h-5" />
@@ -2399,8 +2402,8 @@ const getAvatar = (src, username, size = 8) => {
     onClick={() => router.push("/explore")}
     className={`flex flex-col items-center transition cursor-pointer ${
       router.pathname === "/explore"
-        ? "text-purple-600 dark:text-purple-400"
-        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
+        ? "text-purple-600"
+        : "text-gray-700 hover:text-purple-600"
     }`}
   >
     <FiSearch className="w-5 h-5" />
@@ -2408,50 +2411,46 @@ const getAvatar = (src, username, size = 8) => {
   </div>
 
   {/* Floating Post Button - Centered */}
-  <div className="relative -top-1">
-    <Link href="/newPost">
-      <button
-        className="bg-purple-600 dark:bg-purple-700 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 dark:hover:bg-purple-800 transition border-2 border-white dark:border-gray-800"
-      >
-        <FiPlus className="w-6 h-6" />
-      </button>
-    </Link>
-  </div>
+<div className="relative -top-1">                                                                      <Link href="/newPost">
+    <button                                                                                                className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
+    >
+      <FiPlus className="w-6 h-6" />                                                                     </button>
+  </Link>                                                                                            </div>
 
   {/* Reels */}
   <div
     onClick={() => router.push("/reels")}
     className={`flex flex-col items-center transition cursor-pointer ${
       router.pathname === "/reels"
-        ? "text-purple-600 dark:text-purple-400"
-        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
+        ? "text-purple-600"
+        : "text-gray-700 hover:text-purple-600"
     }`}
   >
     <FiVideo className="w-5 h-5" />
     <span className="text-xs">Reels</span>
   </div>
 
-  {/* Profile */}
-  {user?.username ? (
-    <Link href={`/profile/${user.username}`} className="transition">
-      <div className={`flex flex-col items-center ${
-        router.pathname.includes("/profile")
-          ? "text-purple-600 dark:text-purple-400"
-          : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
-      }`}>
-        <FiUser className="w-5 h-5" />
-        <span className="text-xs">Profile</span>
-      </div>
-    </Link>
-  ) : (
-    <button
-      onClick={() => router.push('/login')}
-      className="flex flex-col items-center text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition"
-    >
+ {/* Profile */}
+{user?.username ? (
+  <Link href={`/profile/${user.username}`} className="transition">
+    <div className={`flex flex-col items-center ${
+      router.pathname.includes("/profile")
+        ? "text-purple-600"
+        : "text-gray-700 hover:text-purple-600"
+    }`}>
       <FiUser className="w-5 h-5" />
       <span className="text-xs">Profile</span>
-    </button>
-  )}
+    </div>
+  </Link>
+) : (
+  <button
+    onClick={() => router.push('/login')}
+    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition"
+  >
+    <FiUser className="w-5 h-5" />
+    <span className="text-xs">Profile</span>
+  </button>
+)} 
 </div>
 
    </div>

@@ -1,10 +1,8 @@
-import { useTheme } from '../context/ThemeContext';
 import { useState } from "react";
 import { useRouter } from "next/router";
 import config from '../src/config';
 
 export default function Register() {
-  const { isDarkMode } = useTheme(); // Add dark mode support
   const router = useRouter();
   const [form, setForm] = useState({ username: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
@@ -57,12 +55,12 @@ const handleSubmit = async (e) => {
 }; 
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-infinityBgDark">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <form
         onSubmit={handleSubmit}
-        className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md w-96 space-y-4"
+        className="bg-white p-6 rounded-lg shadow-md w-96 space-y-4"
       >
-        <h1 className="text-xl font-bold text-center text-gray-800 dark:text-infinityTextDark">Register</h1>
+        <h1 className="text-xl font-bold text-center">Register</h1>
         {error && <p className="text-red-500 text-sm">{error}</p>}
         {success && <p className="text-green-500 text-sm text-center">{success}</p>}
         <input
@@ -70,7 +68,7 @@ const handleSubmit = async (e) => {
           placeholder="Username"
           value={form.username}
           onChange={handleChange}
-          className="w-full border border-gray-300 dark:border-infinityBorderDark rounded p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-infinityTextDark"
+          className="w-full border rounded p-2"
           required
         />
         <input
@@ -79,7 +77,7 @@ const handleSubmit = async (e) => {
           placeholder="Email"
           value={form.email}
           onChange={handleChange}
-          className="w-full border border-gray-300 dark:border-infinityBorderDark rounded p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-infinityTextDark"
+          className="w-full border rounded p-2"
           required
         />
         <div className="relative w-full">
@@ -89,7 +87,7 @@ const handleSubmit = async (e) => {
     placeholder="Password"
     value={form.password}
     onChange={handleChange}
-    className="w-full border border-gray-300 dark:border-infinityBorderDark rounded p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-infinityTextDark pr-12"
+    className="w-full border rounded p-2 pr-12"
     required
   />
 
@@ -108,8 +106,8 @@ const handleSubmit = async (e) => {
     placeholder="Confirm Password"
     value={form.confirmPassword}
     onChange={handleChange}
-    className={`w-full border border-gray-300 dark:border-infinityBorderDark rounded p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-infinityTextDark pr-12 ${
-      passwordsMatch ? "border-gray-300 dark:border-infinityBorderDark" : "border-red-500 dark:border-red-400"
+    className={`w-full border rounded p-2 pr-12 ${
+      passwordsMatch ? "border-gray-300" : "border-red-500"
     }`}
     required
   />
@@ -132,11 +130,11 @@ const handleSubmit = async (e) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-800"
+          className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700"
         >
           {loading ? "Registering..." : "Register"}
         </button>
-	  <p className="text-center text-sm text-gray-600 dark:text-infinityTextSecondaryDark">
+	  <p className="text-center text-sm text-gray-600">
   Already have an account?{" "}
   <span
     onClick={() => router.push("/login")}

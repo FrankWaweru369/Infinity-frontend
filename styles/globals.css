@@ -2,6 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Infinity Dark Mode Variables */
+:root {
+  /* Light theme (default) */
+  --infinity-bg: #ffffff;
+  --infinity-card: #f8fafc;
+  --infinity-text: #1F2937;
+  --infinity-text-secondary: #6B7280;
+  --infinity-accent: #8B5CF6;
+  --infinity-border: #e5e7eb;
+  --infinity-button: #8B5CF6;
+  --infinity-button-text: #ffffff;
+  --infinity-input-bg: #ffffff;
+  --infinity-nav-bg: #ffffff;
+}
+
+[data-theme="dark"] {
+  /* Dark theme - Your design */
+  --infinity-bg: #000000;           /* Main dark blue background */
+  --infinity-card: #111111;         /* Card/darker sections */
+  --infinity-text: #ffffff;         /* Main white text */
+  --infinity-text-secondary: #aaaaaa; /* Secondary gray text */
+  --infinity-accent: #4C1D95;       /* Dark purple accent */
+  --infinity-border: #333333;       /* Border lines */
+  --infinity-button: #4C1D95;       /* Button background */
+  --infinity-button-text: #ffffff;  /* Button text */
+  --infinity-input-bg: #111111;     /* Input field background */
+  --infinity-nav-bg: #111111;       /* Navigation background */
+}
+
 body {
   font-family: sans-serif;
+  background-color: var(--infinity-bg);
+  color: var(--infinity-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Mode Utility Classes */
+.dark-card {
+  background-color: var(--infinity-card);
+  border: 1px solid var(--infinity-border);
+}
+
+.dark-text {
+  color: var(--infinity-text);
+}
+
+.dark-text-secondary {
+  color: var(--infinity-text-secondary);
+}
+
+.dark-button {
+  background-color: var(--infinity-button);
+  color: var(--infinity-button-text);
+}
+
+.dark-input {
+  background-color: var(--infinity-input-bg);
+  color: var(--infinity-text);
+  border: 1px solid var(--infinity-border);
+}
+
+/* Smooth transitions for theme switching */
+.theme-transition {
+  transition: background-color 0.3s ease, 
+              color 0.3s ease, 
+              border-color 0.3s ease,
+              opacity 0.3s ease;
 }

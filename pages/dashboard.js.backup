@@ -15,18 +15,13 @@ import {
   FiPlus,
   FiVideo,
   FiTrash2,
-  FiDownload,
-  FiMenu,
-  FiSun,
-  FiMoon
+  FiDownload
 } from "react-icons/fi";
 import { FaHeart } from "react-icons/fa";
 import axios from "axios";
 import Link from "next/link";
 import FullImageModal from "../components/FullImageModal";
 import config from '../src/config';
-import Notifications from "../components/Notification.js";
-import { useTheme } from '../context/ThemeContext';
 
 const API_BASE = config.apiUrl;
 
@@ -57,10 +52,7 @@ export default function Dashboard() {
   const [recommentLoading, setRecommentLoading] = useState({});
   const currentPath = router.pathname;
   const dropdownRef = useRef(null);
-  const [token, setToken] = useState(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isDarkMode, toggleTheme } = useTheme();
- 
+
   useEffect(() => {
     const validateTokenAndAuth = async () => {
       const token = localStorage.getItem("token");
@@ -98,7 +90,6 @@ export default function Dashboard() {
 
         const userId = payload.id || payload.userId || payload._id;
         setCurrentUserId(userId);
-	setToken(token);
 
         await fetchUserData(token, userId);
 
@@ -177,20 +168,6 @@ export default function Dashboard() {
 
     return { Authorization: `Bearer ${token}` };
   };
-
-const menuRef = useRef(null);
-
-// Add this useEffect
-useEffect(() => {
-  const handleClickOutside = (event) => {
-    if (menuRef.current && !menuRef.current.contains(event.target)) {
-      setIsMenuOpen(false);
-    }
-  };
-
-  document.addEventListener('mousedown', handleClickOutside);
-  return () => document.removeEventListener('mousedown', handleClickOutside);
-}, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1230,127 +1207,82 @@ const refreshPost = async (postId) => {
   return (
   <div className="min-h-screen bg-gray-50 dark:bg-infinityBgDark pb-6">
     {/* Header */}
-<div className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-white dark:bg-gray-900 shadow-sm overflow-visible">
-  <h1 className="font-bold text-lg text-purple-600 dark:text-infinityPurpleDark">
-    Infinity
-  </h1>
+    <div className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-white dark:bg-infinityCardDark shadow-sm">
+      <h1 className="font-bold text-lg text-purple-600 dark:text-infinityPurpleDark dark:text-infinityPurpleDark">Infinity</h1>
 
-  {user && (
-    <div className="flex items-center space-x-4 relative">
-      {/* 🔔 Notifications */}
-      <Notifications token={token} />
+      {user && (
+        <div className="flex items-center space-x-4">
+          <a
+            href={`/profile/${user.username}`}
+            className="flex items-center space-x-2 hover:opacity-80 transition"
+          >
+            {getAvatar(imageUrl(user.profilePicture), user.username, 8)}
+            <span className="text-sm font-medium hover:underline">
+              {user.username}
+            </span>
+          </a>
 
-      {/* Profile */}
-      <a
-        href={`/profile/${user.username}`}
-        className="flex items-center space-x-2 hover:opacity-80 transition"
-      >
-        {getAvatar(imageUrl(user.profilePicture), user.username, 8)}
-        <span className="text-sm font-medium hover:underline dark:text-gray-100">
-          {user.username}
-        </span>
-      </a>
-
-      {/* Menu Icon */}
-      <div className="relative" ref={menuRef}>
-        <button
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition"
-        >
-          <FiMenu className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-        </button>
-
-        {/* Dropdown Menu */}
-        {isMenuOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-            {/* Dark Mode Toggle Switch */}
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-700 dark:text-gray-300">Dark Mode</span>
-                <button
-                  onClick={toggleTheme}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
-                    isDarkMode ? 'bg-purple-600' : 'bg-gray-300'
-                  }`}
-                  aria-label={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      isDarkMode ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {/* Logout Button with Red Background */}
-            <button
-              onClick={() => {
-                handleLogout();
-                setIsMenuOpen(false);
-              }}
-              className="flex items-center justify-center w-full px-4 py-3 text-sm text-white bg-red-500 hover:bg-red-600 rounded-b-md transition"
-            >
-              <span>Logout</span>
-            </button>
-          </div>
-        )}
-      </div>
+          <button
+            onClick={handleLogout}
+            className="text-sm px-3 py-1 bg-red-500 text-white rounded"
+          >
+            Logout
+          </button>
+        </div>
+      )}
     </div>
-  )}
-</div>
 
     <div className="pt-14">
       {/* Create Post */}
-<form
-  onSubmit={handlePostSubmit}
-  className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow-sm"
->
-  <textarea
-    value={content}
-    onChange={(e) => setContent(e.target.value)}
-    placeholder="What's on your mind?"
-    className="w-full border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-infinityPurpleDark dark:bg-gray-800 dark:border-gray-700"
-  />
-  {preview && (
-    <div className="mt-2">
-      <img
-        src={preview}
-        alt="Preview"
-        className="rounded-md max-h-60 object-cover"
-      />
-    </div>
-  )}
-  <div className="flex items-center justify-between mt-3">
-    <label className="flex items-center space-x-2 cursor-pointer text-purple-600 dark:text-infinityPurpleDark">
-      <FiImage className="w-5 h-5" />
-      <span>{image ? "Change Image" : "Add Image"}</span>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={onImageChange}
-        className="hidden"
-      />
-    </label>
-    <button
-      disabled={posting}
-      type="submit"
-      className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 transition"
-    >
-      {posting ? "Posting..." : "Post"}
-    </button>
-  </div>
-</form>
+      <form
+        onSubmit={handlePostSubmit}
+        className="bg-white dark:bg-infinityCardDark p-4 rounded-lg shadow-sm"
+      >
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="What's on your mind?"
+          className="w-full border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+        {preview && (
+          <div className="mt-2">
+            <img
+              src={preview}
+              alt="Preview"
+              className="rounded-md max-h-60 object-cover"
+            />
+          </div>
+        )}
+        <div className="flex items-center justify-between mt-3">
+          <label className="flex items-center space-x-2 cursor-pointer text-purple-600">
+            <FiImage className="w-5 h-5" />
+            <span>{image ? "Change Image" : "Add Image"}</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onImageChange}
+              className="hidden"
+            />
+          </label>
+          <button
+            disabled={posting}
+            type="submit"
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 transition"
+          >
+            {posting ? "Posting..." : "Post"}
+          </button>
+        </div>
+      </form>
     </div>
 
     {/* Feed */}
     <div className="flex-1 p-4 space-y-1">
       {posts.length === 0 ? (
-        <p className="text-center text-gray-500 dark:text-infinityTextSecondaryDark">No posts yet</p>
+        <p className="text-center text-gray-500">No posts yet</p>
       ) : (
         posts.map((post) => (
-          <div key={post._id} className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-lg shadow-sm p-4">
+          <div key={post._id} className="bg-white rounded-lg shadow-sm p-4">
             {/* Header */}
             <div className="flex justify-between items-center mb-3">
               <a
@@ -1362,7 +1294,7 @@ const refreshPost = async (postId) => {
                   {post.author?.username}
                 </span>
               </a>
-              <span className="text-xs text-gray-500 dark:text-infinityTextSecondaryDark">
+              <span className="text-xs text-gray-500">
                 {new Date(post.createdAt).toLocaleString()}
               </span>
             </div>
@@ -1426,25 +1358,25 @@ const refreshPost = async (postId) => {
             key={u._id}
             href={`/profile/${u.username}`}
             className={`flex items-center space-x-3 p-2 transition ${
-              index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-infinityBgDark'
+              index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
             } ${
-              index !== post.likes.length - 1 ? 'border-b border-gray-100 dark:border-infinityBorderDark' : ''
+              index !== post.likes.length - 1 ? 'border-b border-gray-100' : ''
             } hover:bg-purple-50`}
           >
             {/* Avatar with border */}
-            <div className="w-8 h-8 rounded-full border-2 border-purple-200 overflow-hidden bg-white dark:bg-gray-900">
+            <div className="w-8 h-8 rounded-full border-2 border-purple-200 overflow-hidden bg-white">
               {getAvatar(imageUrl(u.profilePicture), u.username, 8)}
             </div>
             
-            <span className="text-sm font-medium text-gray-700 dark:text-infinityTextDark">{u.username}</span>
+            <span className="text-sm font-medium text-gray-700">{u.username}</span>
           </a>
         ))
       ) : (
         <div className="py-6 text-center bg-white rounded">
           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
-            <FiHeart className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            <FiHeart className="w-5 h-5 text-gray-400" />
           </div>
-          <p className="text-sm text-gray-500 dark:text-infinityTextSecondaryDark">No likes yet</p>
+          <p className="text-sm text-gray-500">No likes yet</p>
           <p className="text-xs text-gray-400 mt-1">Be the first to like</p>
         </div>
       )}
@@ -1482,13 +1414,13 @@ const refreshPost = async (postId) => {
                     >
                       <button
                         onClick={() => handleEdit(post)}
-                        className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
+                        className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(post._id)}
-                        className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
+                        className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100"
                       >
                         Delete
                       </button>
@@ -1510,8 +1442,9 @@ const refreshPost = async (postId) => {
                     return (
                       <div
                         key={i}
-                        className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-			    {/* Avatar */}
+                        className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50"
+                      >
+                        {/* Avatar */}
                         <a href={`/profile/${c.user?.username}`}>
                           {getAvatar(avatarSrc, username, 8)}
                         </a>
@@ -1520,11 +1453,12 @@ const refreshPost = async (postId) => {
                         <div className="flex flex-col">
                           <a
                             href={`/profile/${c.user?.username}`}
-                            className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-300">
+                            className="font-semibold text-sm hover:underline text-gray-800"
+                          >
                             {username}
                           </a>
-                          <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-100">                        
-			    {text}
+                          <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200">
+                            {text}
                           </p>
                         </div>
                       </div>
@@ -1542,7 +1476,7 @@ const refreshPost = async (postId) => {
                   )}
                 </>
               ) : (
-                <p className="text-sm text-gray-400 dark:text-gray-500">No comments yet</p>
+                <p className="text-sm text-gray-400">No comments yet</p>
               )}
 
               {/* Comment input */}
@@ -1557,14 +1491,15 @@ const refreshPost = async (postId) => {
                     })
                   }
                   placeholder="Add a comment..."
-                 className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-infinityPurpleDark dark:bg-gray-800 dark:border-gray-700"/> 
+                  className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
                 <button
                   onClick={() => handleComment(post._id)}
                   disabled={commentLoading[post._id]}
                   className={`px-3 py-1 rounded ${
                     commentLoading[post._id]
                       ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                      : "bg-purple-600 text-white hover:bg-purple-700 dark:hover:bg-purple-800"
+                      : "bg-purple-600 text-white hover:bg-purple-700"
                   }`}
                 >
                   {commentLoading[post._id] ? "Posting..." : "Post"}
@@ -1579,7 +1514,7 @@ const refreshPost = async (postId) => {
     {/* Edit Post Modal */}
     {editPost && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 p-4 rounded-lg shadow-lg w-80 relative">
+        <div className="bg-white p-4 rounded-lg shadow-lg w-80 relative">
           {/* Close Button */}
           <button
             onClick={() => {
@@ -1644,7 +1579,7 @@ const refreshPost = async (postId) => {
           {!editPost?.image && !previewImage && (
             <div className="mb-3 p-4 border border-dashed border-gray-300 rounded-lg text-center">
               <FiImage className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-500 dark:text-infinityTextSecondaryDark">No image in this post</p>
+              <p className="text-sm text-gray-500">No image in this post</p>
             </div>
           )}
 
@@ -1694,9 +1629,8 @@ const refreshPost = async (postId) => {
     {/* Enhanced Comments Modal */}
 {activeCommentsPost && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white dark:bg-gray-800 w-96 max-h-[80vh] overflow-y-auto rounded-lg p-4 relative shadow-lg">
-
-	<button
+    <div className="bg-white w-96 max-h-[80vh] overflow-y-auto rounded-lg p-4 relative shadow-lg">
+      <button
         onClick={() => setActiveCommentsPost(null)}
         className="absolute top-2 right-2 text-gray-600 hover:text-black"
       >
@@ -1731,10 +1665,11 @@ const refreshPost = async (postId) => {
                     <div>
                       <a
                         href={`/profile/${comment.user?.username}`}
-			className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-300">
+                        className="font-semibold text-sm hover:underline text-gray-800"
+                      >
                         {username}
                       </a>
-                      <span className="text-xs text-gray-500 ml-2 dark:text-gray-300">
+                      <span className="text-xs text-gray-500 ml-2">
                         {new Date(comment.createdAt).toLocaleDateString()}
                       </span>
                     </div>
@@ -1752,7 +1687,7 @@ const refreshPost = async (postId) => {
                     </button>
                   </div>
                   
-                  <p className="text-gray-700 text-sm mt-1 dark:text-gray-100">{comment.text}</p>
+                  <p className="text-gray-700 text-sm mt-1">{comment.text}</p>
 
                   {/* Recomment Button */}
                   <div className="flex items-center space-x-4 mt-2">
@@ -1773,98 +1708,98 @@ const refreshPost = async (postId) => {
                           [`${activeCommentsPost._id}-${comment._id}`]: true
                         }));
                       }}
-                      className="text-xs text-gray-500 hover:text-purple-600 dark:text-infinityPurpleDark"
+                      className="text-xs text-gray-500 hover:text-purple-600"
                     >
                       Reply
                     </button>
                   </div>
 
                   {/* Recomments Section */}
-{isExpanded && (
-  <div className="mt-3 ml-4 pl-3 border-l-2 border-gray-300 dark:border-gray-700">
-    {/* Show existing recomments */}
-    {comment.recomments && comment.recomments.length > 0 && (
-      <div className="space-y-2 mb-3">
-        {comment.recomments.map((recomment) => {
-          const recommentUsername = recomment.user?.username || 'User';
-          const recommentAvatarSrc = imageUrl(recomment.user?.profilePicture);
-          const isRecommentLiked = recomment.likes?.some(like =>
-            String(like._id || like) === String(userId)
-          );
+                  {isExpanded && (
+                    <div className="mt-3 ml-4 pl-3 border-l-2 border-gray-300">
+                      {/* Show existing recomments */}
+                      {comment.recomments && comment.recomments.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          {comment.recomments.map((recomment) => {
+                            const recommentUsername = recomment.user?.username || 'User';
+                            const recommentAvatarSrc = imageUrl(recomment.user?.profilePicture);
+                            const isRecommentLiked = recomment.likes?.some(like => 
+                              String(like._id || like) === String(userId)
+                            );
 
-          return (
-            <div key={recomment._id} className="flex items-start space-x-2">
-              <img
-                src={recommentAvatarSrc || `https://i.pravatar.cc/150?u=${recommentUsername}`}
-                alt={recommentUsername}
-                className="w-5 h-5 rounded-full flex-shrink-0"
-                onError={(e) => {
-                  e.target.src = `https://i.pravatar.cc/150?u=${recommentUsername || 'unknown'}`;
-                }}
-              />
-              <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-1">
-                  <span className="text-gray-800 font-semibold text-xs dark:text-gray-300">
-                    {recommentUsername}
-                  </span>
-                  <span className="text-gray-400 text-xs dark:text-gray-400">
-                    {new Date(recomment.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <p className="text-gray-700 text-xs mb-1 dark:text-gray-100">{recomment.text}</p>
+                            return (
+                              <div key={recomment._id} className="flex items-start space-x-2">
+                                <img
+                                  src={recommentAvatarSrc || `https://i.pravatar.cc/150?u=${recommentUsername}`}
+                                  alt={recommentUsername}
+                                  className="w-5 h-5 rounded-full flex-shrink-0"
+                                  onError={(e) => {
+                                    e.target.src = `https://i.pravatar.cc/150?u=${recommentUsername || 'unknown'}`;
+                                  }}
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <span className="text-gray-800 font-semibold text-xs">
+                                      {recommentUsername}
+                                    </span>
+                                    <span className="text-gray-400 text-xs">
+                                      {new Date(recomment.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-700 text-xs mb-1">{recomment.text}</p>
+                                  
+                                  {/* Recomment Like Button */}
+                                  <button
+                                    onClick={() => handleLikeRecomment(activeCommentsPost._id, comment._id, recomment._id)}
+                                    className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs"
+                                  >
+                                    {isRecommentLiked ? (
+                                      <FaHeart className="w-3 h-3 text-red-500" />
+                                    ) : (
+                                      <FiHeart className="w-3 h-3" />
+                                    )}
+                                    <span>{recomment.likeCount || 0}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
-                {/* Recomment Like Button */}
-                <button
-                  onClick={() => handleLikeRecomment(activeCommentsPost._id, comment._id, recomment._id)}
-                  className="flex items-center space-x-1 text-gray-400 hover:text-red-500 text-xs dark:text-gray-400"
-                >
-                  {isRecommentLiked ? (
-                    <FaHeart className="w-3 h-3 text-red-500" />
-                  ) : (
-                    <FiHeart className="w-3 h-3" />
+                      {/* Add Recomment Input */}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          value={recommentInputs[`${activeCommentsPost._id}-${comment._id}`] || ''}
+                          onChange={(e) =>
+                            setRecommentInputs({
+                              ...recommentInputs,
+                              [`${activeCommentsPost._id}-${comment._id}`]: e.target.value
+                            })
+                          }
+                          placeholder="Write a recomment..."
+                          className="flex-1 border rounded-md p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddRecomment(activeCommentsPost._id, comment._id);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleAddRecomment(activeCommentsPost._id, comment._id)}
+                          disabled={recommentLoading[`${activeCommentsPost._id}-${comment._id}`]}
+                          className={`px-3 py-1.5 rounded text-xs ${
+                            recommentLoading[`${activeCommentsPost._id}-${comment._id}`]
+                              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
+                        >
+                          {recommentLoading[`${activeCommentsPost._id}-${comment._id}`] ? 'Posting...' : 'Post'}
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <span>{recomment.likeCount || 0}</span>
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-
-    {/* Add Recomment Input */}
-    <div className="flex items-center space-x-2">
-      <input
-        type="text"
-        value={recommentInputs[`${activeCommentsPost._id}-${comment._id}`] || ''}
-        onChange={(e) =>
-          setRecommentInputs({
-            ...recommentInputs,
-            [`${activeCommentsPost._id}-${comment._id}`]: e.target.value
-          })
-        }
-        placeholder="Write a recomment..."
-        className="flex-1 border rounded-md p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-infinityPurpleDark dark:bg-gray-800 dark:border-gray-700"
-        onKeyPress={(e) => {
-          if (e.key === 'Enter') {
-            handleAddRecomment(activeCommentsPost._id, comment._id);
-          }
-        }}
-      />
-      <button
-        onClick={() => handleAddRecomment(activeCommentsPost._id, comment._id)}
-        disabled={recommentLoading[`${activeCommentsPost._id}-${comment._id}`]}
-        className={`px-3 py-1.5 rounded text-xs ${
-          recommentLoading[`${activeCommentsPost._id}-${comment._id}`]
-            ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-            : 'bg-purple-600 text-white hover:bg-purple-700 dark:hover:bg-purple-800'
-        }`}
-      >
-        {recommentLoading[`${activeCommentsPost._id}-${comment._id}`] ? 'Posting...' : 'Post'}
-      </button>
-    </div>
-  </div>
-)}
                 </div>
               </div>
             </div>
@@ -1881,77 +1816,69 @@ const refreshPost = async (postId) => {
     onClose={() => setFullImage(null)}                                                                                  />                                                                                                                  )}
 
     {/* Bottom Navbar */}
-<div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 dark:bg-infinityCardDark/95 backdrop-blur-md border-t border-gray-200 dark:border-infinityBorderDark flex justify-around items-center py-1">
-  {/* Home */}
-  <div
-    onClick={() => router.push("/dashboard")}
-    className={`flex flex-col items-center transition cursor-pointer ${
-      router.pathname === "/dashboard"
-        ? "text-purple-600 dark:text-infinityPurpleDark"
-        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark"
-    }`}
-  >
-    <FiHome className="w-5 h-5" />
-    <span className="text-xs">Home</span>
-  </div>
-  
-  {/* Explore */}
-  <Link href="/explore">
-    <div className={`flex flex-col items-center transition cursor-pointer ${
-      router.pathname === "/explore"
-        ? "text-purple-600 dark:text-infinityPurpleDark"
-        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark"
-    }`}>
-      <FiSearch className="w-5 h-5" />
-      <span className="text-xs">Explore</span>
-    </div>
-  </Link>
-
-  {/* Floating Post Button - Centered */}
-  <div className="relative -top-1">
-    <Link href="/newPost">
-      <button
-        className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
+    <div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 dark:bg-infinityCardDark/95 backdrop-blur-md border-t border-gray-200 dark:border-infinityBorderDark flex justify-around items-center py-1">
+      {/* Home */}
+      <div
+        onClick={() => router.push("/dashboard")}
+        className={`flex flex-col items-center transition cursor-pointer ${
+          router.pathname === "/dashboard"
+            ? "text-purple-600"
+            : "text-gray-700 hover:text-purple-600"
+        }`}
       >
-        <FiPlus className="w-6 h-6" />
-      </button>
-    </Link>
-  </div>
-
-  {/* Reels */}
-  <Link href="/reels">
-    <div className={`flex flex-col items-center transition cursor-pointer ${
-      router.pathname === "/reels"
-        ? "text-purple-600 dark:text-infinityPurpleDark"
-        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark"
-    }`}>
-      <FiVideo className="w-5 h-5" />
-      <span className="text-xs">Reels</span>
-    </div>
-  </Link>
-
-  {/* Profile */}
-  {user?.username ? (
-    <Link href={`/profile/${user.username}`} className="transition">
-      <div className={`flex flex-col items-center ${
-        router.pathname.includes("/profile")
-          ? "text-purple-600 dark:text-infinityPurpleDark"
-          : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark"
-      }`}>
-        <FiUser className="w-5 h-5" />
-        <span className="text-xs">Profile</span>
+        <FiHome className="w-5 h-5" />
+        <span className="text-xs">Home</span>
       </div>
-    </Link>
-  ) : (
-    <button
-      onClick={() => router.push('/login')}
-      className="flex flex-col items-center text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark transition"
-    >
-      <FiUser className="w-5 h-5" />
-      <span className="text-xs">Profile</span>
-    </button>
-  )}
-</div>
+
+      {/* Explore */}
+      <Link href="/explore">
+        <div className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer">
+          <FiSearch className="w-5 h-5" />
+          <span className="text-xs">Explore</span>
+        </div>
+      </Link>
+
+      {/* Floating Post Button - Centered */}
+      <div className="relative -top-1">
+        <Link href="/newPost">
+          <button
+            className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
+          >
+            <FiPlus className="w-6 h-6" />
+          </button>
+        </Link>
+      </div>
+
+      {/* Reels */}
+      <Link href="/reels">
+        <div className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition cursor-pointer">
+          <FiVideo className="w-5 h-5" />
+          <span className="text-xs">Reels</span>
+        </div>
+      </Link>
+
+      {/* Profile */}
+      {user?.username ? (
+        <Link href={`/profile/${user.username}`} className="transition">
+          <div className={`flex flex-col items-center ${
+            router.pathname.includes("/profile")
+              ? "text-purple-600"
+              : "text-gray-700 hover:text-purple-600"
+          }`}>
+            <FiUser className="w-5 h-5" />
+            <span className="text-xs">Profile</span>
+          </div>
+        </Link>
+      ) : (
+        <button
+          onClick={() => router.push('/login')}
+          className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition"
+        >
+          <FiUser className="w-5 h-5" />
+          <span className="text-xs">Profile</span>
+        </button>
+      )}
+    </div>
   </div>
 );
 }
