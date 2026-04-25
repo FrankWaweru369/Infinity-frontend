@@ -27,6 +27,10 @@ import FullImageModal from "../components/FullImageModal";
 import config from '../src/config';
 import Notifications from "../components/Notification.js";
 import { useTheme } from '../context/ThemeContext';
+import PostSkeleton from "../components/PostSkeleton";
+import PostCarousel from "../components/PostCarousel";
+import FullscreenViewer from "../components/FullscreenViewer";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 const API_BASE = config.apiUrl;
 
@@ -34,8 +38,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [content, setContent] = useState("");
-  const [image, setImage] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [images, setImages] = useState([]);
+  const [previews, setPreviews] = useState([]);
   const [posts, setPosts] = useState([]);
   const [posting, setPosting] = useState(false);
   const [commentInputs, setCommentInputs] = useState({});
@@ -60,6 +64,86 @@ export default function Dashboard() {
   const [token, setToken] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { isDarkMode, toggleTheme } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+  const [fullscreenImages, setFullscreenImages] = useState([]);
+  const observerRef = useRef(null);
+
+
+useEffect(() => {
+  const cached = localStorage.getItem("infinityFeed");
+
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      setPosts(parsed);
+      setLoading(false);
+    } catch {}
+  }
+
+  fetchPosts();
+}, []);
+
+useEffect(() => {
+  const fetchPosts = async () => {
+    setLoading(true);
+
+    try {
+      const res = await axios.get(`${API_BASE}/posts?limit=7`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setPosts(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchPosts();
+}, []);
+
+	useEffect(() => {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && !loadingMore && hasMore) {
+        fetchMorePosts();
+      }
+    },
+    {
+      root: null,
+      rootMargin: "1500px",
+      threshold: 0
+    }
+  );
+
+  const current = observerRef.current;
+
+  if (current) observer.observe(current);
+
+  return () => {
+    if (current) observer.unobserve(current);
+  };
+}, [loadingMore, hasMore, posts]);
+
+
+
+useEffect(() => {
+  const handleScroll = () => {
+    if (
+      window.innerHeight + document.documentElement.scrollTop
+      >= document.documentElement.offsetHeight - 200
+    ) {
+      fetchMorePosts();
+    }
+  };
+  window.addEventListener("scroll", handleScroll);
+  return () => window.removeEventListener("scroll", handleScroll);
+}, [posts, loadingMore]);
+
  
   useEffect(() => {
     const validateTokenAndAuth = async () => {
@@ -254,53 +338,63 @@ useEffect(() => {
   }
 }, [posts, user]);
 
+
   // ✅ Image preview
   const onImageChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setImage(file);
-    const reader = new FileReader();
-    reader.onloadend = () => setPreview(reader.result);
-    reader.readAsDataURL(file);
-  };
+  const files = Array.from(e.target.files);
+
+  setImages(files);
+
+  const previewUrls = files.map((file) => URL.createObjectURL(file));
+  setPreviews(previewUrls);
+};
 
   // ✅ Create post handler
   const handlePostSubmit = async (e) => {
-    e.preventDefault();
-    if (!content.trim() && !image) return;
-    setPosting(true);
+  e.preventDefault();
 
-    const formData = new FormData();
-    formData.append("content", content);
-    if (image) formData.append("image", image);
+  if (!content.trim() && images.length === 0) return;
 
-    try {
-      const res = await fetch(`${API_BASE}/posts`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: formData,
-      });
+  setPosting(true);
 
-      const data = await res.json();
+  const formData = new FormData();
+  formData.append("content", content);
 
-      if (res.ok) {
-        setPosts((prev) => [data, ...prev]);
-        setContent("");
-        setImage(null);
-        setPreview(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      } else {
-        console.error(data.message || "Post failed");
+  images.forEach((img) => {
+    formData.append("images", img);
+  });
+
+  try {
+    const res = await fetch(`${API_BASE}/posts`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      setPosts((prev) => [data, ...prev]);
+      setContent("");
+      setImages([]);
+      setPreviews([]);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
-    } catch (err) {
-      console.error("Post error:", err);
-    } finally {
-      setPosting(false);
+    } else {
+      console.error(data.message || "Post failed");
     }
-  };
+  } catch (err) {
+    console.error("Post error:", err);
+  } finally {
+    setPosting(false);
+  }
+};
 
 // ✅ Fetch posts with proper population for immediate updates
 const fetchPosts = async () => {
+	setLoading(true);
   try {
     const timestamp = Date.now();
     const res = await fetch(`${API_BASE}/posts?populate=comments.recomments&_=${timestamp}`, {
@@ -346,6 +440,11 @@ const fetchPosts = async () => {
 
       setPosts(processedPosts);
 
+	  localStorage.setItem(
+  "infinityFeed",
+  JSON.stringify(processedPosts)
+);
+
       if (user) {
         const likedPostsObj = {};
         processedPosts.forEach(post => {
@@ -381,9 +480,39 @@ const fetchPosts = async () => {
     }
   } catch (err) {
     // Silent error - don't disrupt user experience
+  } finally {
+    setLoading(false);
   }
+
 }; 
 
+const fetchMorePosts = async () => {
+  if (loadingMore || !hasMore) return;
+
+  setLoadingMore(true);
+
+  try {
+    const lastPostId = posts[posts.length - 1]?._id;
+
+    const res = await axios.get(
+      `${API_BASE}/posts?limit=7&lastPostId=${lastPostId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const newPosts = res.data;
+
+    if (newPosts.length === 0) {
+      setHasMore(false);
+    } else {
+      setPosts(prev => [...prev, ...newPosts]);
+    }
+
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoadingMore(false);
+  }
+};
   // ✅ Like a post
 const handleLike = async (post) => {
   // Store current state for optimistic update
@@ -1223,10 +1352,37 @@ const refreshPost = async (postId) => {
   }
 };
 
-  if (!user) {
-    return null;
-  }
-  
+if (authChecking) {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-infinityBgDark p-4 space-y-4">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <PostSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+  const removeSelectedImage = (indexToRemove) => {
+  setImages((prev) => prev.filter((_, index) => index !== indexToRemove));
+  setPreviews((prev) => prev.filter((_, index) => index !== indexToRemove));
+};
+
+const handleDragEnd = (result) => {
+  if (!result.destination) return;
+
+  const reorderedImages = Array.from(images);
+  const reorderedPreviews = Array.from(previews);
+
+  const [movedImage] = reorderedImages.splice(result.source.index, 1);
+  const [movedPreview] = reorderedPreviews.splice(result.source.index, 1);
+
+  reorderedImages.splice(result.destination.index, 0, movedImage);
+  reorderedPreviews.splice(result.destination.index, 0, movedPreview);
+
+  setImages(reorderedImages);
+  setPreviews(reorderedPreviews);
+};
+
   return (
   <div className="min-h-screen bg-gray-50 dark:bg-infinityBgDark pb-6">
     {/* Header */}
@@ -1301,123 +1457,232 @@ const refreshPost = async (postId) => {
 </div>
 
     <div className="pt-14">
-      {/* Create Post */}
-<form
-  onSubmit={handlePostSubmit}
-  className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow-sm"
->
-  <textarea
-    value={content}
-    onChange={(e) => setContent(e.target.value)}
-    placeholder="What's on your mind?"
-    className="w-full border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-infinityPurpleDark dark:bg-gray-800 dark:border-gray-700"
-  />
-  {preview && (
-    <div className="mt-2">
-      <img
-        src={preview}
-        alt="Preview"
-        className="rounded-md max-h-60 object-cover"
-      />
+  <form
+    onSubmit={handlePostSubmit}
+    className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow-sm"
+  >
+    <textarea
+      value={content}
+      onChange={(e) => setContent(e.target.value)}
+      placeholder="What's on your mind?"
+      className="w-full border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-infinityPurpleDark dark:bg-gray-800 dark:border-gray-700"
+    />
+
+    {previews.length > 0 && (
+  <DragDropContext onDragEnd={handleDragEnd}>
+    <Droppable droppableId="dashboard-images" direction="horizontal">
+      {(provided) => (
+        <div
+          className="mt-3 grid grid-cols-2 gap-2"
+          {...provided.droppableProps}
+          ref={provided.innerRef}
+        >
+          {previews.map((src, index) => (
+            <Draggable
+              key={index.toString()}
+              draggableId={index.toString()}
+              index={index}
+            >
+              {(provided) => (
+                <div
+                  className="relative cursor-move"
+                  ref={provided.innerRef}
+                  {...provided.draggableProps}
+                  {...provided.dragHandleProps}
+                >
+                  <img
+                    src={src}
+                    alt={`preview-${index}`}
+                    className="rounded-md max-h-40 w-full object-cover"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedImage(index)}
+                    className="absolute top-1 right-1 bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-purple-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </Draggable>
+          ))}
+          {provided.placeholder}
+        </div>
+      )}
+    </Droppable>
+  </DragDropContext>
+)}
+
+    <div className="flex items-center justify-between mt-3">
+      <label className="flex items-center space-x-2 cursor-pointer text-purple-600 dark:text-infinityPurpleDark">
+        <FiImage className="w-5 h-5" />
+        <span>{images.length > 0 ? "Change Images" : "Add Images"}</span>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={onImageChange}
+          className="hidden"
+        />
+      </label>
+
+      <button
+        disabled={posting}
+        type="submit"
+        className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 transition"
+      >
+        {posting ? "Posting..." : "Post"}
+      </button>
     </div>
-  )}
-  <div className="flex items-center justify-between mt-3">
-    <label className="flex items-center space-x-2 cursor-pointer text-purple-600 dark:text-infinityPurpleDark">
-      <FiImage className="w-5 h-5" />
-      <span>{image ? "Change Image" : "Add Image"}</span>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={onImageChange}
-        className="hidden"
-      />
-    </label>
-    <button
-      disabled={posting}
-      type="submit"
-      className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 transition"
-    >
-      {posting ? "Posting..." : "Post"}
-    </button>
-  </div>
-</form>
-    </div>
+  </form>
+</div>
 
     {/* Feed */}
-    <div className="flex-1 p-4 space-y-1">
-      {posts.length === 0 ? (
-        <p className="text-center text-gray-500 dark:text-infinityTextSecondaryDark">No posts yet</p>
-      ) : (
-        posts.map((post) => (
-          <div key={post._id} className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-lg shadow-sm p-4">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-3">
-              <a
-                href={`/profile/${post.author?.username}`}
-                className="flex items-center space-x-3 hover:opacity-80 transition"
+<div className="flex-1 p-4 space-y-4">
+
+{loading ? (
+
+  Array.from({ length: 7 }).map((_, i) => (
+    <PostSkeleton key={i} />
+  ))
+
+) : posts.length === 0 ? (
+
+  <p className="text-center text-gray-500 dark:text-infinityTextSecondaryDark">
+    No posts yet
+  </p>
+
+) : (
+
+  posts.map((post) => (
+
+  <div key={post._id} className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-4">
+
+    {/* Header */}
+    <div className="flex justify-between items-center mb-3">
+      <a
+        href={`/profile/${post.author?.username}`}
+        className="flex items-center space-x-3 hover:opacity-80 transition"
+      >
+        {getAvatar(
+          imageUrl(post.author?.profilePicture),
+          post.author?.username,
+          8
+        )}
+        <span className="font-semibold hover:underline">
+          {post.author?.username}
+        </span>
+      </a>
+
+      <span className="text-xs text-gray-500 dark:text-infinityTextSecondaryDark">
+        {new Date(post.createdAt).toLocaleString()}
+      </span>
+    </div>
+
+    {/* Content */}
+    <p className="mb-2 text-sm">{post.content}</p>
+
+ {post.images?.length > 0 ? (
+  <PostCarousel
+  images={post.images}
+  onImageClick={() => setFullscreenImages(post.images)}
+/>
+) : post.image ? (
+  <img
+    src={post.image}
+    onClick={() => setFullscreenImages([post.image])}
+    className="rounded-md w-full object-cover cursor-pointer"
+  />
+) : null} 
+
+    {/* Actions */}
+    <div className="flex items-center mt-2 text-gray-600 w-full relative">
+
+      <div className="flex items-center space-x-4">
+
+        {/* Like Button */}
+        <button
+          onClick={() => handleLike(post)}
+          className="flex flex-col items-center"
+        >
+          {likedPosts[post._id] ? (
+            <FaHeart className="w-5 h-5 text-red-500" />
+          ) : (
+            <FiHeart className="w-5 h-5 text-gray-500 hover:text-red-500" />
+          )}
+
+          <span className="text-xs mt-1">
+            {post.likes?.length || 0}
+          </span>
+        </button>
+
+        {/* View likers */}
+        <button
+          onClick={() => toggleLikesList(post._id)}
+          className="text-sm text-gray-500 underline"
+        >
+          {post.likes?.length ? "View likers" : "Be first to like"}
+        </button>
+
+        {/* Comment count */}
+        <div className="flex items-center space-x-1">
+          <FiMessageCircle className="w-5 h-5" />
+          <span>{post.comments?.length || 0}</span>
+        </div>
+
+      </div>
+
+      {/* Three dot menu */}
+      {post.author?._id === user?._id && (
+        <div className="ml-auto relative">
+
+          <button
+            onClick={() =>
+              setMenuOpenFor(
+                menuOpenFor === post._id ? null : post._id
+              )
+            }
+            className="p-1 hover:bg-gray-200 rounded-full"
+          >
+            <FiMoreHorizontal className="w-5 h-5" />
+          </button>
+
+          {menuOpenFor === post._id && (
+            <div className="absolute right-0 mt-2 w-24 bg-white border rounded shadow-md z-50">
+
+              <button
+                onClick={() => handleEdit(post)}
+                className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
               >
-                {getAvatar(imageUrl(post.author?.profilePicture), post.author?.username, 8)}
-                <span className="font-semibold hover:underline">
-                  {post.author?.username}
-                </span>
-              </a>
-              <span className="text-xs text-gray-500 dark:text-infinityTextSecondaryDark">
-                {new Date(post.createdAt).toLocaleString()}
-              </span>
+                Edit
+              </button>
+
+              <button
+                onClick={() => handleDelete(post._id)}
+                className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
+              >
+                Delete
+              </button>
+
             </div>
+          )}
+        </div>
+      )}
 
-            {/* Content */}
-            <p className="mb-2 text-sm">{post.content}</p>
-            {post.image && (
-              <img
-                src={post.image}
-                alt="Post"
-                className="rounded-md w-full object-cover mb-2 cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
-                onClick={() => setFullImage(post.image)}
-              />
-            )}
+    </div>
 
-            {/* Actions */}
-            <div className="flex items-center mt-2 text-gray-600 w-full relative">
-              {/* Left side: Like button + Like count + Comment count */}
-              <div className="flex items-center space-x-4">
-                {/* Like Button */}
-<button
-  onClick={() => handleLike(post)}
-  className="flex flex-col items-center"
->
-  {likedPosts[post._id] ? (
-    <FaHeart className="w-5 h-5 text-red-500" />
-  ) : (
-    <FiHeart className="w-5 h-5 text-gray-500 hover:text-red-500" />
-  )}
-  <span className="text-xs mt-1">{post.likes?.length || 0}</span>
-</button>
+    {/* Likes dropdown */}
+    {likesListOpenFor === post._id && (
+  <div className="absolute left-4 mt-2 bg-white dark:bg-infinityBgDark border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg p-3 w-60 z-50">
 
-                {/* clickable count opens list */}
-                <button
-                  onClick={() => toggleLikesList(post._id)}
-                  className="text-sm text-gray-500 underline"
-                >
-                  {post.likes?.length ? "View likers" : "Be first to like"}
-                </button>
-
-                {/* Comment count */}
-                <div className="flex items-center space-x-1">
-                  <FiMessageCircle className="w-5 h-5" />
-                  <span>{post.comments?.length || 0}</span>
-                </div>
-              </div>
-
-		   {/* Likes list dropdown/modal - Simplified with gray background */}
-{likesListOpenFor === post._id && (
-  <div className="absolute left-4 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-3 w-60 z-50">
-    {/* Header with subtle gray background */}
+	    {/* Header with subtle gray background */}
     <div className="text-sm font-semibold mb-3 pb-2 border-b border-gray-200 text-gray-800 bg-gray-50 px-2 py-1 rounded-t">
       Liked by ({post.likes?.length || 0})
     </div>
-    
+
     {/* List with alternating background for better separation */}
     <div className="max-h-48 overflow-y-auto bg-gray-50/30 rounded">
       {post.likes && post.likes.length ? (
@@ -1435,7 +1700,7 @@ const refreshPost = async (postId) => {
             <div className="w-8 h-8 rounded-full border-2 border-purple-200 overflow-hidden bg-white dark:bg-gray-900">
               {getAvatar(imageUrl(u.profilePicture), u.username, 8)}
             </div>
-            
+
             <span className="text-sm font-medium text-gray-700 dark:text-infinityTextDark">{u.username}</span>
           </a>
         ))
@@ -1449,9 +1714,10 @@ const refreshPost = async (postId) => {
         </div>
       )}
     </div>
-    
+
     {/* Footer with subtle gray background */}
-    <div className="mt-3 pt-2 border-t border-gray-200 text-right bg-gray-50/50 px-2 py-1 rounded-b">
+    <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 text-right bg-gray-50/50 dark:bg-infinityBgDark px-2 py-1 rounded-b">
+
       <button
         onClick={() => setLikesListOpenFor(null)}
         className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
@@ -1462,43 +1728,7 @@ const refreshPost = async (postId) => {
   </div>
 )} 
 
-              {/* Three-dot menu only on the right */}
-              {post.author?._id === user?._id && (
-                <div className="ml-auto relative">
-                  <button
-                    onClick={() =>
-                      setMenuOpenFor(menuOpenFor === post._id ? null : post._id)
-                    }
-                    className="p-1 hover:bg-gray-200 rounded-full"
-                  >
-                    <FiMoreHorizontal className="w-5 h-5" />
-                  </button>
-
-                  {/* Dropdown menu */}
-                  {menuOpenFor === post._id && (
-                    <div
-                      ref={dropdownRef}
-                      className="absolute right-0 mt-2 w-24 bg-white border rounded shadow-md z-50"
-                    >
-                      <button
-                        onClick={() => handleEdit(post)}
-                        className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(post._id)}
-                        className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div> 
-
-            {/* Comments */}
+                {/* Comments */}
             <div className="mt-3 space-y-2">
               {post.comments && post.comments.length > 0 ? (
                 <>
@@ -1511,7 +1741,7 @@ const refreshPost = async (postId) => {
                       <div
                         key={i}
                         className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-			    {/* Avatar */}
+                            {/* Avatar */}
                         <a href={`/profile/${c.user?.username}`}>
                           {getAvatar(avatarSrc, username, 8)}
                         </a>
@@ -1524,7 +1754,7 @@ const refreshPost = async (postId) => {
                             {username}
                           </a>
                           <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-100">                        
-			    {text}
+                            {text}
                           </p>
                         </div>
                       </div>
@@ -1545,36 +1775,46 @@ const refreshPost = async (postId) => {
                 <p className="text-sm text-gray-400 dark:text-gray-500">No comments yet</p>
               )}
 
-              {/* Comment input */}
-              <div className="flex items-center space-x-2 mt-2">
-                <input
-                  type="text"
-                  value={commentInputs[post._id] || ""}
-                  onChange={(e) =>
-                    setCommentInputs({
-                      ...commentInputs,
-                      [post._id]: e.target.value,
-                    })
-                  }
-                  placeholder="Add a comment..."
-                 className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-infinityPurpleDark dark:bg-gray-800 dark:border-gray-700"/> 
-                <button
-                  onClick={() => handleComment(post._id)}
-                  disabled={commentLoading[post._id]}
-                  className={`px-3 py-1 rounded ${
-                    commentLoading[post._id]
-                      ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                      : "bg-purple-600 text-white hover:bg-purple-700 dark:hover:bg-purple-800"
-                  }`}
-                >
-                  {commentLoading[post._id] ? "Posting..." : "Post"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ))
-      )}
+      {/* Comment input */}
+      <div className="flex items-center space-x-2 mt-2">
+
+        <input
+          type="text"
+          value={commentInputs[post._id] || ""}
+          onChange={(e) =>
+            setCommentInputs({
+              ...commentInputs,
+              [post._id]: e.target.value
+            })
+          }
+          placeholder="Add a comment..."
+          className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:border-gray-700"
+        />
+
+        <button
+          onClick={() => handleComment(post._id)}
+          disabled={commentLoading[post._id]}
+          className={`px-3 py-1 rounded ${
+            commentLoading[post._id]
+              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+              : "bg-purple-600 text-white hover:bg-purple-700"
+          }`}
+        >
+          {commentLoading[post._id] ? "Posting..." : "Post"}
+        </button>
+
+      </div>
+
     </div>
+
+  </div>
+
+))
+
+)}
+{loadingMore && <PostSkeleton />}
+<div ref={observerRef} className="h-10"></div>
+</div>
 
     {/* Edit Post Modal */}
     {editPost && (
@@ -1600,8 +1840,8 @@ const refreshPost = async (postId) => {
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
             rows="3"
-            className="w-full border rounded p-2 mb-3 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
-            placeholder="Edit your post..."
+            className="w-full border rounded p-2 mb-3 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 dark:placeholder-gray-400"   
+	placeholder="Edit your post..."
           />
 
           {/* Image Display */}
@@ -1879,6 +2119,13 @@ const refreshPost = async (postId) => {
 	 {fullImage && (                                                                                                         <FullImageModal
     imageUrl={fullImage}
     onClose={() => setFullImage(null)}                                                                                  />                                                                                                                  )}
+
+{fullscreenImages.length > 0 && (
+  <FullscreenViewer
+    images={fullscreenImages}
+    onClose={() => setFullscreenImages([])}
+  />
+)}
 
     {/* Bottom Navbar */}
 <div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 dark:bg-infinityCardDark/95 backdrop-blur-md border-t border-gray-200 dark:border-infinityBorderDark flex justify-around items-center py-1">

@@ -28,6 +28,10 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import FullImageModal from "../../components/FullImageModal";
+import { Swiper, SwiperSlide } from "swiper/react";
+import "swiper/css";
+import { Navigation, Pagination } from "swiper/modules";
+import FullscreenViewer from "../../components/FullscreenViewer";
 
 const API_BASE = config.apiUrl;
 
@@ -76,6 +80,7 @@ const [likedPosts, setLikedPosts] = useState({});
 const [expandedComments, setExpandedComments] = useState({});
 const [recommentInputs, setRecommentInputs] = useState({});
 const [recommentLoading, setRecommentLoading] = useState({});
+const [fullscreenImages, setFullscreenImages] = useState([]);
 
 const dropdownRef = useRef(null);
 
@@ -1284,12 +1289,12 @@ const getAvatar = (src, username, size = 8) => {
   {/* Top Bar */}
 <div className="flex items-center justify-between bg-white dark:bg-gray-900 p-4 shadow-md sticky top-0 z-20">
   <button
-    onClick={() => router.push("/dashboard")}
-    className="flex items-center text-purple-600 font-semibold hover:underline"
-  >
-    <FiArrowLeft className="mr-2 w-5 h-5" />
-    Back
-  </button>
+  onClick={() => router.back()}
+  className="flex items-center text-purple-600 font-semibold hover:underline"
+>
+  <FiArrowLeft className="mr-2 w-5 h-5" />
+  Back
+</button>
   <h1 className="font-bold text-lg">Profile</h1>
   <span />
 </div>
@@ -1579,27 +1584,27 @@ const getAvatar = (src, username, size = 8) => {
 	  {/* Edit Profile Modal */}
 {isEditingProfile && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 animate-fadeIn">
-    <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-2xl p-6 w-96 shadow-xl relative border border-gray-100 animate-scaleIn">
-      
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-96 shadow-xl relative border border-gray-100 dark:border-gray-700 animate-scaleIn">
+
       {/* Close Button */}
       <button
         onClick={() => setIsEditingProfile(false)}
-        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition"
+        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition"
       >
         <FiX className="w-5 h-5" />
       </button>
 
       {/* Title */}
-      <h2 className="text-xl font-semibold text-gray-800 mb-5 flex items-center gap-2">
-        <FiUser className="text-purple-600 dark:text-infinityPurpleDark" />
+      <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-5 flex items-center gap-2">
+        <FiUser className="text-purple-600 dark:text-purple-400" />
         Edit Profile
       </h2>
 
       <div className="space-y-4">
         {/* Full Name */}
         <div>
-          <label className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-1">
-            <FiUser className="text-purple-500" /> Full Name
+          <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+            <FiUser className="text-purple-500 dark:text-purple-400" /> Full Name
           </label>
           <input
             type="text"
@@ -1608,14 +1613,14 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, fullName: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
           />
         </div>
 
         {/* Bio */}
         <div>
-          <label className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-1">
-            <FiInfo className="text-purple-500" /> Bio
+          <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+            <FiInfo className="text-purple-500 dark:text-purple-400" /> Bio
           </label>
           <textarea
             placeholder="Write something about yourself..."
@@ -1624,21 +1629,21 @@ const getAvatar = (src, username, size = 8) => {
               setEditData({ ...editData, bio: e.target.value })
             }
             rows="3"
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:outline-none resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
           />
         </div>
 
         {/* Gender */}
         <div>
-          <label className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-1">
-            <FaVenusMars className="text-purple-500" /> Gender
+          <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+            <FaVenusMars className="text-purple-500 dark:text-purple-400" /> Gender
           </label>
           <select
             value={editData.gender}
             onChange={(e) =>
               setEditData({ ...editData, gender: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:outline-none"
           >
             <option value="">Select gender</option>
             <option value="male">Male</option>
@@ -1648,24 +1653,51 @@ const getAvatar = (src, username, size = 8) => {
         </div>
 
         {/* Date of Birth */}
-        <div>
-          <label className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-1">
-            <FiCalendar className="text-purple-500" /> Date of Birth
-          </label>
-          <input
-            type="date"
-            value={editData.dob}
-            onChange={(e) =>
-              setEditData({ ...editData, dob: e.target.value })
-            }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-          />
-        </div>
+<div>
+  <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+    <FiCalendar className="text-purple-500 dark:text-purple-400" /> Date of Birth
+  </label>
+  <input
+    type="text"
+    placeholder="DD/MM/YYYY or YYYY-MM-DD"
+    value={editData.dob}
+    onChange={(e) => {
+      const value = e.target.value;
+      setEditData({ ...editData, dob: value });
+    }}
+    onBlur={() => {
+      // Optional: Auto-format or validate on blur
+      const value = editData.dob;
+      if (value) {
+        // Try to parse common formats
+        let parsedDate = null;
+        
+        // Check for DD/MM/YYYY format
+        if (value.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+          const [day, month, year] = value.split('/');
+          parsedDate = new Date(`${year}-${month}-${day}`);
+        }
+        // Check for YYYY-MM-DD format
+        else if (value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          parsedDate = new Date(value);
+        }
+        
+        if (parsedDate && !isNaN(parsedDate)) {
+          setEditData({ ...editData, dob: parsedDate.toISOString().split('T')[0] });
+        }
+      }
+    }}
+    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+  />
+  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+    Format: DD/MM/YYYY or YYYY-MM-DD
+  </p>
+</div>
 
         {/* Location */}
         <div>
-          <label className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-1">
-            <FiMapPin className="text-purple-500" /> Location
+          <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+            <FiMapPin className="text-purple-500 dark:text-purple-400" /> Location
           </label>
           <input
             type="text"
@@ -1674,14 +1706,14 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, location: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
           />
         </div>
 
         {/* Website */}
         <div>
-          <label className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-1">
-            <FiGlobe className="text-purple-500" /> Website
+          <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+            <FiGlobe className="text-purple-500 dark:text-purple-400" /> Website
           </label>
           <input
             type="text"
@@ -1690,14 +1722,14 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, website: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
           />
         </div>
 
         {/* Phone */}
         <div>
-          <label className="flex items-center gap-2 text-gray-700 text-sm font-medium mb-1">
-            <FiPhone className="text-purple-500" /> Phone
+          <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+            <FiPhone className="text-purple-500 dark:text-purple-400" /> Phone
           </label>
           <input
             type="text"
@@ -1706,7 +1738,7 @@ const getAvatar = (src, username, size = 8) => {
             onChange={(e) =>
               setEditData({ ...editData, phone: e.target.value })
             }
-            className="w-full border border-gray-300 dark:border-infinityBorderDark rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
           />
         </div>
       </div>
@@ -1777,12 +1809,30 @@ const getAvatar = (src, username, size = 8) => {
                 {post.content && <p className="mb-2 text-sm">{post.content}</p>}
 
                 {/* Image */}
-                {post.image && (
-                  <div className="rounded-md overflow-hidden mb-2">
-                    <img src={imageUrl(post.image)} alt="Post" className="rounded-md w-full object-cover mb-2 cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
-			onClick={() => setFullImage(post.image)} />
-                  </div>
-                )}
+                {(post.images?.length > 0 || post.image) && (
+  <div className="rounded-md overflow-hidden mb-2">
+
+    <Swiper
+      spaceBetween={10}
+      slidesPerView={1}
+      className="w-full"
+    >
+      {(post.images?.length ? post.images : [post.image]).map((img, index) => (
+        <SwiperSlide key={index}>
+          <img
+            src={imageUrl(img)}
+            alt={`Post ${index}`}
+            className="w-full object-cover cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
+            onClick={() =>
+              setFullImage(post.images?.length ? post.images : [post.image])
+            }
+          />
+        </SwiperSlide>
+      ))}
+    </Swiper>
+
+  </div>
+)}
 
                 {/* Actions */}
                 <div className="flex items-center w-full mt-3 text-gray-600 relative">
@@ -2379,6 +2429,13 @@ const getAvatar = (src, username, size = 8) => {
   />
 )}
 
+{fullscreenImages.length > 0 && (
+  <FullscreenViewer
+    images={fullscreenImages}
+    onClose={() => setFullscreenImages([])}
+  />
+)}
+
   {/* Bottom Navbar */}
 <div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 flex justify-around items-center py-1">
   {/* Home */}
@@ -2411,7 +2468,7 @@ const getAvatar = (src, username, size = 8) => {
   <div className="relative -top-1">
     <Link href="/newPost">
       <button
-        className="bg-purple-600 dark:bg-purple-700 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 dark:hover:bg-purple-800 transition border-2 border-white dark:border-gray-800"
+        className="bg-purple-600 dark:bg-purple-700 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 dark:hover:bg-purple-800 transition border-2 border-white"
       >
         <FiPlus className="w-6 h-6" />
       </button>

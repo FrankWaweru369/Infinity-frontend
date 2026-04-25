@@ -375,13 +375,13 @@ const handleUnfollow = async (userId) => {
             <div className="flex-1 relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${searchType === 'users' ? 'users, names...' : 'posts, topics...'}`}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              />
+  type="text"
+  value={searchQuery}
+  onChange={(e) => setSearchQuery(e.target.value)}
+  placeholder={`Search ${searchType === 'users' ? 'users, names...' : 'posts, topics...'}`}
+  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+/>
             </div>
             <button
               onClick={handleSearch}
@@ -706,27 +706,27 @@ const handleUnfollow = async (userId) => {
         </div>
       </div>
 	  {/* bottom navbar */}
-<div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 dark:bg-infinityCardDark/95 backdrop-blur-md border-t border-gray-200 dark:border-infinityBorderDark flex justify-around items-center py-1">
+<div className="fixed bottom-0 left-0 w-full z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 flex justify-around items-center py-1">
   {/* Home */}
   <div
     onClick={() => router.push("/dashboard")}
     className={`flex flex-col items-center transition cursor-pointer ${
       router.pathname === "/dashboard"
-        ? "text-purple-600 dark:text-infinityPurpleDark"
-        : "text-gray-700 hover:text-purple-600 dark:text-infinityPurpleDark"
+        ? "text-purple-600 dark:text-purple-400"
+        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
     }`}
   >
     <FiHome className="w-5 h-5" />
     <span className="text-xs">Home</span>
   </div>
 
-
+  {/* Explore */}
   <div
     onClick={() => router.push("/explore")}
     className={`flex flex-col items-center transition cursor-pointer ${
       router.pathname === "/explore"
-        ? "text-purple-600 dark:text-infinityPurpleDark"
-        : "text-gray-700 hover:text-purple-600 dark:text-infinityPurpleDark"
+        ? "text-purple-600 dark:text-purple-400"
+        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
     }`}
   >
     <FiSearch className="w-5 h-5" />
@@ -734,62 +734,65 @@ const handleUnfollow = async (userId) => {
   </div>
 
   {/* Floating Post Button - Centered */}
-<div className="relative -top-1">                                                                      <Link href="/newPost">
-    <button                                                                                                className="bg-purple-600 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 transition border-2 border-white"
-    >
-      <FiPlus className="w-6 h-6" />                                                                     </button>
-  </Link>                                                                                            </div>
+  <div className="relative -top-1">
+    <Link href="/newPost">
+      <button
+        className="bg-purple-600 dark:bg-purple-700 text-white rounded-full p-2 shadow-lg hover:bg-purple-700 dark:hover:bg-purple-800 transition border-2 border-white"
+      >
+        <FiPlus className="w-6 h-6" />
+      </button>
+    </Link>
+  </div>
 
   {/* Reels */}
   <div
     onClick={() => router.push("/reels")}
     className={`flex flex-col items-center transition cursor-pointer ${
       router.pathname === "/reels"
-        ? "text-purple-600 dark:text-infinityPurpleDark"
-        : "text-gray-700 hover:text-purple-600 dark:text-infinityPurpleDark"
+        ? "text-purple-600 dark:text-purple-400"
+        : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
     }`}
   >
     <FiVideo className="w-5 h-5" />
     <span className="text-xs">Reels</span>
   </div>
 
-  
-{/* Profile */}
-{authChecking ? (
-  <div className="flex flex-col items-center text-gray-400 dark:text-gray-500">
-    <div className="w-5 h-5 rounded-full border-2 border-gray-300 border-t-purple-600 animate-spin"></div>
-    <span className="text-xs mt-1">...</span>
-  </div>
-) : user?.username ? (
-  <Link 
-    href={`/profile/${user.username}`} 
-    className="transition"
-    onClick={(e) => {
-      e.preventDefault();
-      router.push(`/profile/${user.username}`);
-    }}
-  >
-    <div className={`flex flex-col items-center ${
-      router.pathname.includes("/profile")
-        ? "text-purple-600 dark:text-infinityPurpleDark"
-        : "text-gray-700 hover:text-purple-600 dark:text-infinityPurpleDark"
-    }`}>
+  {/* Profile */}
+  {authChecking ? (
+    <div className="flex flex-col items-center text-gray-400 dark:text-gray-400">
+      <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 border-t-purple-600 dark:border-t-purple-400 animate-spin"></div>
+      <span className="text-xs mt-1">...</span>
+    </div>
+  ) : user?.username ? (
+    <Link
+      href={`/profile/${user.username}`}
+      className="transition"
+      onClick={(e) => {
+        e.preventDefault();
+        router.push(`/profile/${user.username}`);
+      }}
+    >
+      <div className={`flex flex-col items-center ${
+        router.pathname.includes("/profile")
+          ? "text-purple-600 dark:text-purple-400"
+          : "text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400"
+      }`}>
+        <FiUser className="w-5 h-5" />
+        <span className="text-xs">Profile</span>
+      </div>
+    </Link>
+  ) : (
+    <button
+      onClick={() => {
+        alert('No user found! Redirecting to login...');
+        router.push('/login');
+      }}
+      className="flex flex-col items-center text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition"
+    >
       <FiUser className="w-5 h-5" />
       <span className="text-xs">Profile</span>
-    </div>
-  </Link>
-) : (
-  <button
-    onClick={() => {
-      alert('No user found! Redirecting to login...');
-      router.push('/login');
-    }}
-    className="flex flex-col items-center text-gray-700 hover:text-purple-600 transition"
-  >
-    <FiUser className="w-5 h-5" />
-    <span className="text-xs">Profile</span>
-  </button>
-)}
+    </button>
+  )}
 </div>
     </div>
   );

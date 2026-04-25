@@ -15,6 +15,50 @@ export default function Login() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+const subscribeUserToPush = async (token) => {
+  try {
+    if (!("serviceWorker" in navigator)) return;
+
+    await navigator.serviceWorker.register("/sw.js");
+    const registration = await navigator.serviceWorker.ready;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+    }
+
+    await fetch(`${config.apiUrl}/notifications/subscribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ subscription }),
+    });
+  } catch (err) {
+    console.error("Push subscription failed:", err.message);
+  }
+};
+
+const urlBase64ToUint8Array = (base64String) => {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+};
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -33,6 +77,8 @@ export default function Login() {
       // Save token + user in localStorage
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
+
+      await subscribeUserToPush(data.token);
 
       router.push("/dashboard");
     } catch (err) {

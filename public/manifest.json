@@ -3,7 +3,7 @@
   "short_name": "Infinity",
   "description": "Beyond the scroll, real connections are made",
   "theme_color": "#4C1D95",
-  "background_color": "#000000",
+  "background_color": "#4C1D95",
   "display": "standalone",
   "orientation": "portrait",
   "scope": "/",

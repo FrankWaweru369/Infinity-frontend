@@ -22,6 +22,7 @@ import {
   FiSettings,
   FiChevronDown
 } from "react-icons/fi";
+import { RiShareForwardLine } from "react-icons/ri";
 import { FaHeart, FaPause, FaPlay } from "react-icons/fa";
 import { reelService } from "../services/reelService";
 import { useAuth } from "../context/AuthContext";
@@ -1102,8 +1103,8 @@ const handleLikeRecomment = async (commentId, recommentId) => {
   return (
     <div className="h-screen bg-black relative overflow-hidden">
       {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-50 bg-white bg-opacity-10 backdrop-blur-md p-3 flex items-center justify-between">
-        <button
+<div className="absolute top-0 left-0 right-0 z-50 bg-transparent p-3 flex items-center justify-between">
+         <button
           onClick={() => router.back()}
           className="flex items-center text-purple-600 font-semibold hover:underline"
         >
@@ -1196,11 +1197,13 @@ const handleLikeRecomment = async (commentId, recommentId) => {
       )}
 
       {/* Reels Container */}
-      <div
-        className="h-full snap-y snap-mandatory overflow-y-scroll pt-12"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div 
+  className="h-full snap-y snap-mandatory overflow-y-scroll pt-12"
+  style={{ scrollSnapStop: 'always' }}
+  onTouchStart={handleTouchStart}
+  onTouchEnd={handleTouchEnd}
+>
+
         {reels.length === 0 ? (
   <div className="h-full flex items-center justify-center text-white">
     <div className="text-center">
@@ -1328,13 +1331,14 @@ const handleLikeRecomment = async (commentId, recommentId) => {
                   </button>
 
                   {/* Share Button */}
-                  <button
-                    onClick={() => handleShare(reel)}
-                    className="flex flex-col items-center"
-                  >
-                    <FiShare className="w-8 h-8 text-white hover:text-purple-300 transition" />
-                    <span className="text-white text-xs mt-1">Share</span>
-                  </button>
+<button
+  onClick={() => handleShare(reel)}
+  className="flex flex-col items-center"
+>
+  <RiShareForwardLine className="w-9 h-9 text-white hover:text-purple-300 transition" />
+  <span className="text-white text-[10px] font-medium mt-1">Share</span>
+</button>
+
                   
                   {/* Three Dots Button - Only show for reel owner */}
 {getCurrentUserId() && reel.author?._id === getCurrentUserId() && (
@@ -1352,31 +1356,41 @@ const handleLikeRecomment = async (commentId, recommentId) => {
 )}
                 </div>
 
-                {/* Reel Content */}
-                <div className="absolute bottom-20 left-0 right-0 p-4 text-white">
-                  {/* User Info */}
-                  <div className="flex items-center space-x-3 mb-2">
-                    <img
-                      src={buildAssetUrl(reel.author?.profilePicture)}
-                      alt={reel.author?.username}
-                      className="w-8 h-8 rounded-full border-2 border-purple-500"
-                      onError={(e) => {
-                        e.target.src = `https://i.pravatar.cc/150?u=${reel.author?.username || 'unknown'}`;
-                      }}
-                    />
-                    <span className="font-semibold text-sm">{reel.author?.username}</span>
-                    <FollowButton targetUser={reel.author} />
-                  </div>
+               {/* Reel Content - Pushed lower to sit flush with navbar */}
+<div className="absolute bottom-[64px] left-0 right-0 p-4 pb-2 text-white z-10 pointer-events-none">
+  <div className="max-w-[82%] pointer-events-auto"> 
+    
+    {/* User Info */}
+    <div className="flex items-center space-x-3 mb-1.5">
+      <img
+        src={buildAssetUrl(reel.author?.profilePicture)}
+        alt={reel.author?.username}
+        className="w-8 h-8 rounded-full border-2 border-white/50 shadow-sm"
+        onError={(e) => {
+          e.target.src = `https://i.pravatar.cc/150?u=${reel.author?.username || 'unknown'}`;
+        }}
+      />
+      <span className="font-bold text-sm drop-shadow-lg">
+        @{reel.author?.username}
+      </span>
+      <FollowButton targetUser={reel.author} />
+    </div>
 
-                  {/* Caption */}
-                  <p className="text-sm font-medium mb-2 line-clamp-2">{reel.caption}</p>
+    {/* Caption */}
+    <p className="text-sm font-medium mb-1.5 line-clamp-2 drop-shadow-lg leading-tight">
+      {reel.caption}
+    </p>
 
-                  {/* Music */}
-                  <div className="flex items-center space-x-2 text-xs text-purple-200 opacity-90">
-                    <FiMusic className="w-3 h-3" />
-                    <span>{reel.music}</span>
-                  </div>
-                </div>
+    {/* Music */}
+    <div className="flex items-center space-x-2 text-xs text-white/80 drop-shadow-md">
+      <FiMusic className="w-3 h-3" />
+      <span className="truncate max-w-[150px]">{reel.music}</span>
+    </div>
+    
+  </div>
+</div>
+ 
+
 
                 {/* Data Saver Indicator */}
                 {dataSaverMode && !loadedVideoUrls[reel._id] && index !== currentReelIndex && (
@@ -1420,23 +1434,6 @@ const handleLikeRecomment = async (commentId, recommentId) => {
         )}
       </div>
 
-      
-{reels.length > 0 && (
-  <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-50">
-    <div className="flex space-x-1 overflow-x-auto max-w-[90vw] px-4">
-      {reels.map((_, index) => (
-        <div
-          key={index}
-          className={`flex-shrink-0 h-1 rounded-full transition-all duration-300 ${
-            index === currentReelIndex
-              ? "bg-purple-500 w-8"
-              : "bg-gray-500 w-4"
-          }`}
-        />
-      ))}
-    </div>
-  </div>
-)}
 
       {/* Bottom Navbar */}
       <div className="fixed bottom-0 left-0 w-full z-50 bg-black/90 backdrop-blur-lg border-t border-gray-800/50">
@@ -1465,14 +1462,17 @@ const handleLikeRecomment = async (commentId, recommentId) => {
           </button>
 
           {/* Create Reel */}
-          <div className="relative -top-6 mx-1">
-            <button
-              onClick={() => setUploadModalOpen(true)}
-              className="bg-purple-600 text-white rounded-full p-3.5 shadow-xl hover:bg-purple-700 transition-transform hover:scale-105 active:scale-95 border-2 border-white/20"
-            >
-              <FiPlus className="w-6 h-6" />
-            </button>
-          </div>
+<div className="flex flex-col items-center justify-center mx-1">
+  <button
+    onClick={() => setUploadModalOpen(true)}
+    className="bg-purple-600 text-white rounded-lg p-2 shadow-md hover:bg-purple-700 transition-all active:scale-95 border border-white/10"
+  >
+    <FiPlus className="w-5 h-5" />
+  </button>
+  {/* Optional: Add a label to match the others */}
+  <span className="text-[10px] mt-1 text-gray-400">Create</span>
+</div>
+
 
          {/* Following tab button - FIXED */}
 <button

@@ -19,16 +19,16 @@
 
 [data-theme="dark"] {
   /* Dark theme - Your design */
-  --infinity-bg: #000000;           /* Main dark blue background */
-  --infinity-card: #111111;         /* Card/darker sections */
-  --infinity-text: #ffffff;         /* Main white text */
-  --infinity-text-secondary: #aaaaaa; /* Secondary gray text */
-  --infinity-accent: #4C1D95;       /* Dark purple accent */
-  --infinity-border: #333333;       /* Border lines */
-  --infinity-button: #4C1D95;       /* Button background */
-  --infinity-button-text: #ffffff;  /* Button text */
-  --infinity-input-bg: #111111;     /* Input field background */
-  --infinity-nav-bg: #111111;       /* Navigation background */
+  --infinity-bg: #000000;
+  --infinity-card: #111111;
+  --infinity-text: #ffffff;
+  --infinity-text-secondary: #aaaaaa;
+  --infinity-accent: #4C1D95;
+  --infinity-border: #333333;
+  --infinity-button: #4C1D95;
+  --infinity-button-text: #ffffff;
+  --infinity-input-bg: #111111;
+  --infinity-nav-bg: #111111;
 }
 
 body {
@@ -65,8 +65,81 @@ body {
 
 /* Smooth transitions for theme switching */
 .theme-transition {
-  transition: background-color 0.3s ease, 
-              color 0.3s ease, 
+  transition: background-color 0.3s ease,
+              color 0.3s ease,
               border-color 0.3s ease,
               opacity 0.3s ease;
+}
+
+/* ===================================================
+   SWIPER (INFINITY THEME INTEGRATION)
+   - Does NOT affect your dark mode text system
+=================================================== */
+
+:root {
+  --infinity-purple: #8B5CF6; /* purple-500 */
+}
+
+/* Navigation arrows */
+.swiper-button-next,
+.swiper-button-prev {
+  color: var(--infinity-purple) !important;
+  transition: all 0.2s ease;
+}
+
+.swiper-button-next:hover,
+.swiper-button-prev:hover {
+  color: #7c3aed !important; /* purple-600 */
+  transform: scale(1.1);
+}
+
+/* Arrow size */
+.swiper-button-next::after,
+.swiper-button-prev::after {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Pagination dots */
+.swiper-pagination-bullet {
+  background: #9ca3af !important;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.swiper-pagination-bullet-active {
+  background: var(--infinity-purple) !important;
+  opacity: 1;
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+/* Dark mode only affects swiper visuals (NOT text system) */
+[data-theme="dark"] .swiper-pagination-bullet {
+  background: #4b5563 !important;
+}
+
+[data-theme="dark"] .swiper-pagination-bullet-active {
+  background: var(--infinity-purple) !important;
+}
+
+/* Smooth Swiper container */
+.swiper {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.fullscreen-fade {
+  animation: fadeInScale 0.25s ease-out;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }

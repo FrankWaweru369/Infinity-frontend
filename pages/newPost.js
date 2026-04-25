@@ -4,18 +4,22 @@ import { useState, useRef } from 'react';
 import { FiX, FiImage, FiVideo, FiMusic, FiUpload } from 'react-icons/fi';
 import { useRouter } from 'next/router';
 import config from '../src/config';
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 const API_BASE = config.apiUrl;
 
 
 
 export default function NewPostPage() {
-  const { isDarkMode } = useTheme(); // Add dark mode support
+  const { isDarkMode } = useTheme();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('post');
   const [caption, setCaption] = useState('');
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [file, setFile] = useState(null); 
+const [preview, setPreview] = useState(null);
+
+const [files, setFiles] = useState([]);
+const [previews, setPreviews] = useState([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   const [songName, setSongName] = useState('');
@@ -30,53 +34,75 @@ export default function NewPostPage() {
 
   // Handle file selection
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+  const selectedFiles = Array.from(e.target.files || []);
+  if (selectedFiles.length === 0) return;
 
-    // Validate file size for reels
-    if (activeTab === 'reel' && selectedFile.size > 50 * 1024 * 1024) {
-      alert('File size must be less than 50MB');
+  // Reel validation (only one video expected)
+  if (activeTab === "reel") {
+    const reelFile = selectedFiles[0];
+
+    if (reelFile.size > 50 * 1024 * 1024) {
+      alert("File size must be less than 50MB");
       return;
     }
 
-    setFile(selectedFile);
+    setFile(reelFile);
 
-    // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreview(reader.result);
     };
-    reader.readAsDataURL(selectedFile);
-  };
+    reader.readAsDataURL(reelFile);
+
+    return;
+  }
+
+  // Image post mode (multiple images)
+  setFiles(selectedFiles);
+
+  const previewUrls = selectedFiles.map((file) =>
+    URL.createObjectURL(file)
+  );
+
+  setPreviews(previewUrls);
+};
 
   // Handle post submission
   const handlePostSubmit = async (e) => {
   e.preventDefault();
   
   // Validation
-  if (activeTab === 'reel' && !file) {
-    alert('Please select a video for your reel');
-    return;
-  }
-  
-  if (!caption.trim() && !file) {
-    alert('Please add a caption or select a file');
-    return;
-  }
+  if (activeTab === "reel" && !file) {
+  alert("Please select a video for your reel");
+  return;
+}
 
-  setUploading(true);
+if (activeTab === "post" && !caption.trim() && files.length === 0) {
+  alert("Please add a caption or select at least one image");
+  return;
+}
 
-  const formData = new FormData();
-  formData.append("content", caption);
-  
-  if (file) {
-    formData.append(activeTab === 'post' ? 'image' : 'video', file);
-  }
-  
-  
-  if (activeTab === 'reel' && songName.trim()) {
-    formData.append("song_name", songName);
-  }
+if (activeTab === "reel" && !caption.trim() && !file) {
+  alert("Please add a caption or select a video");
+  return;
+}
+
+setUploading(true);
+
+const formData = new FormData();
+formData.append("content", caption);
+
+if (activeTab === "post") {
+  files.forEach((img) => {
+    formData.append("images", img);
+  });
+} else {
+  formData.append("video", file);
+}
+
+if (activeTab === "reel" && songName.trim()) {
+  formData.append("song_name", songName);
+}
 
   try {
     const endpoint = activeTab === 'post' ? 'posts' : 'reels';
@@ -106,11 +132,20 @@ export default function NewPostPage() {
 };
 
 const resetForm = () => {
-  setCaption('');
+  setCaption("");
+  setSongName("");
+
+  // Reel state
   setFile(null);
   setPreview(null);
-  setSongName(''); 
-  if (fileInputRef.current) fileInputRef.current.value = "";
+
+  // Post images state
+  setFiles([]);
+  setPreviews([]);
+
+  if (fileInputRef.current) {
+    fileInputRef.current.value = "";
+  }
 };
 
   // Trigger file input
@@ -118,7 +153,26 @@ const resetForm = () => {
     fileInputRef.current?.click();
   };
 
-  
+const removeSelectedImage = (indexToRemove) => {
+  setFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
+  setPreviews((prev) => prev.filter((_, index) => index !== indexToRemove));
+};
+
+  const handleDragEnd = (result) => {
+  if (!result.destination) return;
+
+  const reorderedFiles = Array.from(files);
+  const reorderedPreviews = Array.from(previews);
+
+  const [movedFile] = reorderedFiles.splice(result.source.index, 1);
+  const [movedPreview] = reorderedPreviews.splice(result.source.index, 1);
+
+  reorderedFiles.splice(result.destination.index, 0, movedFile);
+  reorderedPreviews.splice(result.destination.index, 0, movedPreview);
+
+  setFiles(reorderedFiles);
+  setPreviews(reorderedPreviews);
+};
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-infinityBgDark flex flex-col">
@@ -179,27 +233,29 @@ const resetForm = () => {
         <form onSubmit={handlePostSubmit} className="p-4 max-w-md mx-auto">
           {/* Hidden file input */}
           <input
-            ref={fileInputRef}
-            type="file"
-            accept={activeTab === 'post' ? 'image/*' : 'video/*'}
-            onChange={handleFileChange}
-            className="hidden"
-          />
+  type="file"
+  ref={fileInputRef}
+  multiple
+  accept="image/*"
+  onChange={handleFileChange}
+  className="hidden"
+/>
 
           {/* POST CREATION */}
           {activeTab === 'post' ? (
             <div className="space-y-4">
               {/* What's on your mind */}
               <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-lg p-4">
-                <h2 className="font-medium text-gray-800 mb-2">
+                <h2 className="font-medium text-gray-200 mb-2">
                   What's on your mind?
                 </h2>
                 <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Share your thoughts..."
-                  className="w-full h-20 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-                  rows={3}
+                  className="w-full h-20 p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400" 
+
+		rows={3}
                   disabled={uploading}
                 />
               </div>
@@ -227,31 +283,99 @@ const resetForm = () => {
                 </div>
               )}
 
-              {/* Add Image Section */}
-              <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-gray-700 mb-3">
-                  <div className={`w-4 h-4 flex items-center justify-center text-sm ${file ? 'text-green-500' : 'text-gray-400'}`}>
-                    {file ? '✓' : '☐'}
-                  </div>
-                  <span className="text-sm font-medium">
-                    {file ? 'Image Selected' : 'Add Image'}
-                  </span>
-                </div>
-                
-                <button
-                  type="button"
-                  onClick={triggerFileInput}
-                  disabled={uploading}
-                  className={`w-full border-2 border-dashed ${
-                    file ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-purple-400'
-                  } rounded-lg p-6 text-center ${uploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              {/* Add Images Section */}
+<div className="bg-white dark:bg-gray-900 rounded-lg p-4">
+  <div className="flex items-center gap-2 text-gray-700 mb-3">
+    <div
+      className={`w-4 h-4 flex items-center justify-center text-sm ${
+        files.length > 0 ? "text-green-500" : "text-gray-400"
+      }`}
+    >
+      {files.length > 0 ? "✓" : "☐"}
+    </div>
+
+    <span className="text-sm font-medium">
+      {files.length > 0
+        ? `${files.length} image${files.length > 1 ? "s" : ""} selected`
+        : "Add Images"}
+    </span>
+  </div>
+
+  <button
+    type="button"
+    onClick={triggerFileInput}
+    disabled={uploading}
+    className={`w-full border-2 border-dashed ${
+      files.length > 0
+        ? "border-green-300 bg-green-50"
+        : "border-gray-300 hover:border-purple-400"
+    } rounded-lg p-6 text-center ${
+      uploading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+    }`}
+  >
+    <FiImage
+      className={`w-12 h-12 mx-auto mb-2 ${
+        files.length > 0 ? "text-green-400" : "text-gray-400"
+      }`}
+    />
+
+    <p
+      className={`text-sm font-medium ${
+        files.length > 0 ? "text-green-600" : "text-gray-800"
+      }`}
+    >
+      {files.length > 0 ? "Tap to change images" : "Tap to browse files"}
+    </p>
+  </button>
+
+  {/* Preview Grid */}
+
+{previews.length > 0 && (
+  <DragDropContext onDragEnd={handleDragEnd}>
+    <Droppable droppableId="images" direction="horizontal">
+      {(provided) => (
+        <div
+          className="grid grid-cols-3 gap-2 mt-4"
+          {...provided.droppableProps}
+          ref={provided.innerRef}
+        >
+          {previews.map((src, index) => (
+            <Draggable
+              key={index.toString()}
+              draggableId={index.toString()}
+              index={index}
+            >
+              {(provided) => (
+                <div
+                  className="relative"
+                  ref={provided.innerRef}
+                  {...provided.draggableProps}
+                  {...provided.dragHandleProps}
                 >
-                  <FiImage className={`w-12 h-12 mx-auto mb-2 ${file ? 'text-green-400' : 'text-gray-400'}`} />
-                  <p className={`text-sm font-medium ${file ? 'text-green-600' : 'text-gray-800'}`}>
-                    {file ? 'Tap to change image' : 'Tap to browse files'}
-                  </p>
-                </button>
-              </div>
+                  <img
+                    src={src}
+                    alt={`preview-${index}`}
+                    className="w-full h-24 object-cover rounded-md"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedImage(index)}
+                    className="absolute top-1 right-1 bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-purple-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </Draggable>
+          ))}
+          {provided.placeholder}
+        </div>
+      )}
+    </Droppable>
+  </DragDropContext>
+)} 
+</div>
 
               {/* Post Button */}
               <div className="sticky bottom-0 bg-gray-50 dark:bg-infinityBgDark pt-4">
@@ -344,8 +468,8 @@ const resetForm = () => {
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Describe your reel..."
-                  className="w-full h-16 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-                  rows={2}
+                  className="w-full h-16 p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+		  rows={2}
                   disabled={uploading}
                 />
               </div>
@@ -360,8 +484,8 @@ const resetForm = () => {
     value={songName}
     onChange={(e) => setSongName(e.target.value)}
     placeholder="Song name (leave blank for Original Sound)..."
-    className="w-full p-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-    disabled={uploading}
+    className="w-full p-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+		  disabled={uploading}
   />
   <p className="text-xs text-gray-500 mt-1">
     Leave empty to use Original Sound from your video
