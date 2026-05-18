@@ -23,6 +23,17 @@ const [previews, setPreviews] = useState([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   const [songName, setSongName] = useState('');
+  const [visibility, setVisibility] = useState("public");
+
+const [allowLikes, setAllowLikes] = useState(true);
+
+const [allowComments, setAllowComments] = useState(true);
+
+const [allowRecomments, setAllowRecomments] = useState(true);
+
+const [selectedUsers, setSelectedUsers] = useState([]);
+const [searchUsers, setSearchUsers] = useState("");
+const [userResults, setUserResults] = useState([]);
 
   // Get auth headers (assuming similar to your dashboard)
   const getAuthHeaders = () => {
@@ -90,7 +101,33 @@ if (activeTab === "reel" && !caption.trim() && !file) {
 setUploading(true);
 
 const formData = new FormData();
+
 formData.append("content", caption);
+
+// 🌍 Visibility
+formData.append("visibility", visibility);
+
+// 🎛 Interaction controls
+formData.append("allowLikes", allowLikes);
+
+formData.append(
+  "allowComments",
+  allowComments
+);
+
+formData.append(
+  "allowRecomments",
+  allowRecomments
+);
+
+formData.append(
+  "allowedUsers",
+  JSON.stringify(
+    visibility === "personal"
+      ? selectedUsers.map((u) => u._id)
+      : []
+  )
+);
 
 if (activeTab === "post") {
   files.forEach((img) => {
@@ -174,6 +211,32 @@ const removeSelectedImage = (indexToRemove) => {
   setPreviews(reorderedPreviews);
 };
 
+const handleUserSearch = async (query) => {
+
+  setSearchUsers(query);
+
+  if (!query.trim()) {
+    setUserResults([]);
+    return;
+  }
+
+  try {
+
+    const res = await axios.get(
+      `${API_BASE}/users/search?query=${query}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    setUserResults(res.data || []);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
   return (
     <div className="h-screen bg-gray-50 dark:bg-infinityBgDark flex flex-col">
       {/* Header with Tabs */}
@@ -241,25 +304,239 @@ const removeSelectedImage = (indexToRemove) => {
   className="hidden"
 />
 
-          {/* POST CREATION */}
+            {/* POST CREATION */}
           {activeTab === 'post' ? (
             <div className="space-y-4">
               {/* What's on your mind */}
               <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-lg p-4">
-                <h2 className="font-medium text-gray-200 mb-2">
-                  What's on your mind?
-                </h2>
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Share your thoughts..."
-                  className="w-full h-20 p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400" 
+<h2 className="font-medium text-gray-200 mb-2">
+What's on your mind?
+</h2>
+<textarea
+value={caption}
+onChange={(e) => setCaption(e.target.value)}
+placeholder="Share your thoughts..."
+className="w-full h-20 p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-4
+00 focus:border-transparent text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
 
-		rows={3}
-                  disabled={uploading}
-                />
+rows={3}  
+              disabled={uploading}  
+            />  
+          </div>
+
+{/* 🌍 Visibility & Interaction Settings */}
+
+<div className="bg-white dark:bg-gray-900 rounded-lg p-4 space-y-4">  {/* Visibility */}
+
+  <div>  
+    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">  
+      Post Visibility  
+    </label>  <select  
+  value={visibility}  
+  onChange={(e) => setVisibility(e.target.value)}  
+  className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"  
+>  
+  <option value="public">  
+    Public  
+  </option>  
+
+  <option value="private">  
+    Private  
+  </option>  
+
+  <option value="personal">  
+    Personal  
+  </option>  
+</select>
+
+  </div>  {/* Public interaction controls */}
+{visibility === "public" && (
+<div className="space-y-3">
+
+<label className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded-lg">  
+
+    <span className="text-sm text-gray-700 dark:text-gray-300">  
+      Allow Likes  
+    </span>  
+
+    <input  
+      type="checkbox"  
+      checked={allowLikes}  
+      onChange={() =>  
+        setAllowLikes(!allowLikes)  
+      }  
+      className="w-4 h-4 accent-purple-600"  
+    />  
+  </label>  
+
+  <label className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded-lg">  
+
+    <span className="text-sm text-gray-700 dark:text-gray-300">  
+      Allow Comments  
+    </span>  
+
+    <input  
+      type="checkbox"  
+      checked={allowComments}  
+      onChange={() =>  
+        setAllowComments(!allowComments)  
+      }  
+      className="w-4 h-4 accent-purple-600"  
+    />  
+  </label>  
+
+  <label className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded-lg">  
+
+    <span className="text-sm text-gray-700 dark:text-gray-300">  
+      Allow Recomments  
+    </span>  
+
+    <input  
+      type="checkbox"  
+      checked={allowRecomments}  
+      onChange={() =>  
+        setAllowRecomments(!allowRecomments)  
+      }  
+      className="w-4 h-4 accent-purple-600"  
+    />  
+  </label>  
+
+</div>
+
+)}
+
+{/* Personal Post User Selector */}
+{visibility === "personal" && (
+
+  <div className="mt-3 space-y-3">
+
+    {/* Search Input */}
+    <input
+      type="text"
+      value={searchUsers}
+      onChange={(e) => handleUserSearch(e.target.value)}
+      placeholder="Search users..."
+      className="w-full border rounded-xl p-2 text-sm
+                 focus:outline-none focus:ring-2 focus:ring-purple-500
+                 dark:bg-gray-800 dark:border-gray-700"
+    />
+
+    {/* Search Results */}
+    {userResults.length > 0 && (
+      <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+
+        {userResults.map((u) => {
+
+          const alreadySelected = selectedUsers.some(
+            (x) => x._id === u._id
+          );
+
+          return (
+            <button
+              key={u._id}
+              type="button"
+              disabled={alreadySelected}
+              onClick={() => {
+                if (!alreadySelected) {
+                  setSelectedUsers([...selectedUsers, u]);
+                }
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 text-left transition
+                ${
+                  alreadySelected
+                    ? "bg-gray-100 dark:bg-gray-800 opacity-50 cursor-not-allowed"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+            >
+
+              <div className="flex items-center space-x-3">
+
+                {getAvatar(
+                  imageUrl(u.profilePicture),
+                  u.username,
+                  8
+                )}
+
+                <span className="text-sm text-gray-800 dark:text-gray-200">
+                  {u.username}
+                </span>
+
               </div>
 
+              {alreadySelected && (
+                <span className="text-xs text-purple-600">
+                  Added
+                </span>
+              )}
+
+            </button>
+          );
+        })}
+      </div>
+    )}
+
+    {/* Selected Users */}
+    {selectedUsers.length > 0 && (
+      <div className="flex flex-wrap gap-2">
+
+        {selectedUsers.map((u) => (
+          <div
+            key={u._id}
+            className="flex items-center space-x-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1 rounded-full"
+          >
+
+            <span className="text-sm">
+              {u.username}
+            </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedUsers(
+                  selectedUsers.filter((x) => x._id !== u._id)
+                )
+              }
+              className="text-xs hover:text-red-500"
+            >
+              ✕
+            </button>
+
+          </div>
+        ))}
+
+      </div>
+    )}
+
+  </div>
+
+)}
+
+{/* Private post info */}
+{visibility === "private" && (
+<div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+
+<p className="text-sm text-purple-700 dark:text-purple-300">  
+     Users will not be able to like or comment publicly.  
+    They can only send private feedback visible only to you.  
+  </p>  
+
+</div>
+
+)}
+
+{/* Personal post info */}
+{visibility === "personal" && (
+<div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
+
+<p className="text-sm text-indigo-700 dark:text-indigo-300">  
+   Only selected users will be able to view this post.  
+  </p>  
+
+</div>
+
+)}
+
+</div> 
               {/* Preview */}
               {preview && (
                 <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 rounded-lg p-4">

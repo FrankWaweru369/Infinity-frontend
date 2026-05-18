@@ -71,7 +71,6 @@ export default function Dashboard() {
   const [fullscreenImages, setFullscreenImages] = useState([]);
   const [activeFeedbackPost, setActiveFeedbackPost] = useState(null);
   const [feedbackInputs, setFeedbackInputs] = useState({});
-  const [feedbackLoading, setFeedbackLoading] = useState({});
   const observerRef = useRef(null);
 
 
@@ -118,7 +117,7 @@ useEffect(() => {
     },
     {
       root: null,
-      rootMargin: "2000px",
+      rootMargin: "1500px",
       threshold: 0
     }
   );
@@ -1387,17 +1386,11 @@ const handleDragEnd = (result) => {
 };
 
 const sendPrivateFeedback = async (postId) => {
-
   const text = feedbackInputs[postId];
 
   if (!text?.trim()) return;
 
   try {
-
-    setFeedbackLoading((prev) => ({
-      ...prev,
-      [postId]: true,
-    }));
 
     const res = await axios.post(
       `${API_BASE}/posts/${postId}/feedback`,
@@ -1409,58 +1402,27 @@ const sendPrivateFeedback = async (postId) => {
       }
     );
 
-    const newFeedback = res.data.feedback;
-
-    /* Update posts instantly */
     setPosts((prev) =>
       prev.map((post) =>
         post._id === postId
           ? {
               ...post,
-              privateFeedback: [
-                ...(post.privateFeedback || []),
-                newFeedback,
-              ],
+              privateFeedback: res.data.privateFeedback,
             }
           : post
       )
     );
 
-    /* Update modal instantly if open */
-    if (activeFeedbackPost?._id === postId) {
-
-      setActiveFeedbackPost((prev) => ({
-        ...prev,
-        privateFeedback: [
-          ...(prev.privateFeedback || []),
-          newFeedback,
-        ],
-      }));
-
-    }
-
-    /* Clear input */
     setFeedbackInputs({
       ...feedbackInputs,
       [postId]: "",
     });
 
   } catch (err) {
-
     console.error(err);
     alert("Failed to send feedback");
-
-  } finally {
-
-    setFeedbackLoading((prev) => ({
-      ...prev,
-      [postId]: false,
-    }));
-
   }
-
 };
-
   return (
   <div className="min-h-screen bg-gray-50 dark:bg-infinityBgDark pb-6">
     {/* Header */}
@@ -1645,6 +1607,7 @@ const sendPrivateFeedback = async (postId) => {
   href={`/profile/${post.author?.username}`}
   className="flex items-center space-x-3 hover:opacity-80 transition"
 >
+
   {getAvatar(
     imageUrl(post.author?.profilePicture),
     post.author?.username,
@@ -1652,22 +1615,26 @@ const sendPrivateFeedback = async (postId) => {
   )}
 
   <div className="flex flex-col">
+
     <span className="font-semibold hover:underline">
       {post.author?.username}
     </span>
 
-    {post.visibility === "private" ? (
-  <span className="text-[11px] text-purple-700 dark:text-purple-300 font-medium bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 rounded-full w-fit">
-    Private
-  </span>
-) : post.visibility === "personal" ? (
-  <span className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium bg-indigo-100 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full w-fit">
-    Personal
-  </span>
-) : null}
-  </div>
-</a>
+    {post.visibility === "private" && (
+      <span className="text-[10px] mt-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 w-fit">
+        Private
+      </span>
+    )}
 
+    {post.visibility === "personal" && (
+      <span className="text-[10px] mt-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 w-fit">
+        Personal
+      </span>
+    )}
+
+  </div>
+
+</a>
       <span className="text-xs text-gray-500 dark:text-infinityTextSecondaryDark">
         {new Date(post.createdAt).toLocaleString()}
       </span>
@@ -1676,25 +1643,17 @@ const sendPrivateFeedback = async (postId) => {
     {/* Content */}
     <p className="mb-2 text-sm">{post.content}</p>
 
- {post.images?.length > 1 ? (
-
+ {post.images?.length > 0 ? (
   <PostCarousel
-    images={post.images}
-    onImageClick={() => setFullscreenImages(post.images)}
-  />
-
-) : post.image || post.images?.[0] ? (
-
-  <img
-  src={post.image || post.images?.[0]}
-  onClick={() =>
-    setFullscreenImages([
-      post.image || post.images?.[0]
-    ])
-  }
-  className="rounded-md w-full cursor-pointer"
+  images={post.images}
+  onImageClick={() => setFullscreenImages(post.images)}
 />
-
+) : post.image ? (
+  <img
+    src={post.image}
+    onClick={() => setFullscreenImages([post.image])}
+    className="rounded-md w-full object-cover cursor-pointer"
+  />
 ) : null} 
 
     {/* Actions */}
@@ -1702,61 +1661,70 @@ const sendPrivateFeedback = async (postId) => {
 
       <div className="flex items-center space-x-4">
 
-                {/* LIKE BUTTONS */}
+        {/* LIKE BUTTONS */}
   {post.allowLikes !== false && (
-  <>
-    <button
-      onClick={() => handleLike(post)}
-      className="flex items-center justify-center space-x-2
-                 min-w-[58px] px-3 py-2 rounded-xl
-                 bg-gray-100/70 dark:bg-gray-800
-                 hover:bg-gray-200 dark:hover:bg-gray-700
-                 transition active:scale-90"
-    >
-      {likedPosts[post._id] ? (
-        <FaHeart className="w-5 h-5 text-red-500" />
-      ) : (
-        <FiHeart className="w-5 h-5 text-gray-500 hover:text-red-500" />
-      )}
+    <>
+      <button
+        onClick={() => handleLike(post)}
+        className="flex flex-col items-center justify-center
+                   min-w-[58px] px-3 py-2 rounded-xl
+                   bg-gray-100/70 dark:bg-gray-800
+                   hover:bg-gray-200 dark:hover:bg-gray-700
+                   transition active:scale-90"
+      >
+        {likedPosts[post._id] ? (
+          <FaHeart className="w-5 h-5 text-red-500" />
+        ) : (
+          <FiHeart className="w-5 h-5 text-gray-500 hover:text-red-500" />
+        )}
 
-      <span className="text-sm text-gray-700 dark:text-gray-300">
-        {post.likes?.length || 0}
-      </span>
-    </button>
+        <span className="text-xs mt-1 text-gray-700 dark:text-gray-300">
+          {post.likes?.length || 0}
+        </span>
+      </button>
 
-    <button
-      onClick={() => toggleLikesList(post._id)}
-      className="px-3 py-2 rounded-xl
-                 bg-gray-100/70 dark:bg-gray-800
-                 text-sm text-gray-600 dark:text-gray-300
-                 hover:bg-gray-200 dark:hover:bg-gray-700
-                 transition active:scale-95"
-    >
-      {post.likes?.length ? "View likers" : "Be first to like"}
-    </button>
-  </>
-)}
+      <button
+        onClick={() => toggleLikesList(post._id)}
+        className="px-3 py-2 rounded-xl
+                   bg-gray-100/70 dark:bg-gray-800
+                   text-sm text-gray-600 dark:text-gray-300
+                   hover:bg-gray-200 dark:hover:bg-gray-700
+                   transition active:scale-95"
+      >
+        {post.likes?.length ? "View likers" : "Be first to like"}
+      </button>
+    </>
+  )}
 
-       {/* Comments / Feedback */}                                                                                    {post.visibility === "private" ? (
+       {/* Comments / Feedback */}
+{post.visibility === "private" ? (
   post.author?._id === currentUserId ? (
     <button
       onClick={() => setActiveFeedbackPost(post)}
       className="flex items-center space-x-2 px-3 py-2 rounded-xl
                  bg-gray-100/70 dark:bg-gray-800
-                 hover:bg-gray-200 dark:hover:bg-gray-700                                                                              transition active:scale-90"                                                                              >
-      <FiMessageCircle className="w-5 h-5 text-gray-500 dark:text-gray-300" />                                        
+                 hover:bg-gray-200 dark:hover:bg-gray-700
+                 transition active:scale-90"
+    >
+      <FiMessageCircle className="w-5 h-5 text-gray-500 dark:text-gray-300" />
+
       <span className="text-sm text-gray-700 dark:text-gray-300">
         {post.privateFeedback?.length || 0}
       </span>
-    </button>                                                                                                           ) : (
-    <div                                                                                                                    className="flex items-center space-x-2 px-3 py-2 rounded-xl
+    </button>
+  ) : (
+    <div
+      className="flex items-center space-x-2 px-3 py-2 rounded-xl
                  bg-gray-100/50 dark:bg-gray-800
-                 text-sm text-gray-500 dark:text-gray-400"                                                                >
-      <FiMessageCircle className="w-5 h-5" />                                                                               <span>Private Feedback</span>
+                 text-sm text-gray-500 dark:text-gray-400"
+    >
+      <FiMessageCircle className="w-5 h-5" />
+      <span>Private Feedback</span>
     </div>
   )
 ) : (
-  post.allowComments !== false && (                                                                                       <button
+  post.allowComments !== false && (
+    <button
       onClick={() => setActiveCommentsPost(post)}
       className="flex items-center space-x-2 px-3 py-2 rounded-xl
                  bg-gray-100/70 dark:bg-gray-800
@@ -1867,156 +1835,128 @@ const sendPrivateFeedback = async (postId) => {
   </div>
 )} 
 
-                {/* Comments */}
-            <div className="mt-3 space-y-2">
-              {post.allowComments !== false && (
 
-  post.comments && post.comments.length > 0 ? (
+           {/* Comments */}
+{post.allowComments !== false && (
+  <div className="mt-3 space-y-2">
 
-    <>
-      {/* Show top comment only */}
-      {post.comments.slice(0, 1).map((c, i) => {
-        const username = c.user?.username ?? "user";
-        const avatarSrc = imageUrl(c.user?.profilePicture);
-        const text = c.text ?? c;
+    {post.comments && post.comments.length > 0 ? (
+      <>
+        {/* Show top comment only */}
+        {post.comments.slice(0, 1).map((c, i) => {
 
-        return (
-          <div
-            key={i}
-            className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700"
-          >
-            {/* Avatar */}
-            <a href={`/profile/${c.user?.username}`}>
-              {getAvatar(avatarSrc, username, 8)}
-            </a>
+          const username = c.user?.username ?? "user";
+          const avatarSrc = imageUrl(c.user?.profilePicture);
+          const text = c.text ?? c;
 
-            {/* Username + Comment */}
-            <div className="flex flex-col">
-              <a
-                href={`/profile/${c.user?.username}`}
-                className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-300"
-              >
-                {username}
+          return (
+            <div
+              key={i}
+              className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700"
+            >
+              {/* Avatar */}
+              <a href={`/profile/${c.user?.username}`}>
+                {getAvatar(avatarSrc, username, 8)}
               </a>
 
-              <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-100">
-                {text}
-              </p>
+              {/* Username + Comment */}
+              <div className="flex flex-col">
+                <a
+                  href={`/profile/${c.user?.username}`}
+                  className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-300"
+                >
+                  {username}
+                </a>
+
+                <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-100">
+                  {text}
+                </p>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
 
-      {/* View all comments button */}
-      {post.comments.length > 1 && (
+        {/* View all comments */}
+        {post.comments.length > 1 && (
+          <button
+            onClick={() => setActiveCommentsPost(post)}
+            className="text-xs text-purple-600 hover:underline focus:outline-none"
+          >
+            View all {post.comments.length} comments
+          </button>
+        )}
+      </>
+    ) : (
+      <p className="text-sm text-gray-400 dark:text-gray-500">
+        No comments yet
+      </p>
+    )}
+
+    {/* Private Feedback */}
+    {post.visibility === "private" && (
+      <div className="flex items-center space-x-2 mt-3">
+        <input
+          type="text"
+          value={feedbackInputs[post._id] || ""}
+          onChange={(e) =>
+            setFeedbackInputs({
+              ...feedbackInputs,
+              [post._id]: e.target.value,
+            })
+          }
+          placeholder="Send private feedback..."
+          className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:border-gray-700"
+        />
+
         <button
-          onClick={() => setActiveCommentsPost(post)}
-          className="text-xs text-purple-600 hover:underline focus:outline-none"
+          onClick={() => sendPrivateFeedback(post._id)}
+          className="px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700"
         >
-          View all {post.comments.length} comments
+          Send
         </button>
-      )}
-    </>
+      </div>
+    )}
 
-  ) : (
+    {/* Comment input */}
+    {post.visibility !== "private" && (
+      <div className="flex items-center space-x-2 mt-2">
 
-    <p className="text-sm text-gray-400 dark:text-gray-500">
-      No comments yet
-    </p>
+        <input
+          type="text"
+          value={commentInputs[post._id] || ""}
+          onChange={(e) =>
+            setCommentInputs({
+              ...commentInputs,
+              [post._id]: e.target.value,
+            })
+          }
+          placeholder="Add a comment..."
+          className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:border-gray-700"
+        />
 
-  )
+        <button
+          onClick={() => handleComment(post._id)}
+          disabled={commentLoading[post._id]}
+          className={`px-3 py-1 rounded ${
+            commentLoading[post._id]
+              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+              : "bg-purple-600 text-white hover:bg-purple-700"
+          }`}
+        >
+          {commentLoading[post._id] ? "Posting..." : "Post"}
+        </button>
 
-)}
-
-
-     {/* Comment / Feedback Input */}
-{post.visibility === "private" ? (
-
-  <div className="flex items-center space-x-2 mt-2">
-
-    <input
-      type="text"
-      value={feedbackInputs[post._id] || ""}
-      onChange={(e) =>
-        setFeedbackInputs({
-          ...feedbackInputs,
-          [post._id]: e.target.value
-        })
-      }
-      placeholder="Send private feedback..."
-      className="flex-1 border rounded-xl p-2 text-sm
-                 focus:outline-none focus:ring-2 focus:ring-purple-500
-                 bg-gray-50 dark:bg-gray-800
-                 border-gray-200 dark:border-gray-700"
-    />
-
-    <button
-      onClick={() => sendPrivateFeedback(post._id)}
-      disabled={feedbackLoading[post._id]}
-      className={`px-3 py-2 rounded-xl transition active:scale-95 ${
-        feedbackLoading[post._id]
-          ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-          : "bg-purple-600 text-white hover:bg-purple-700"
-      }`}
-    >
-      {feedbackLoading[post._id] ? "Sending..." : "Send"}
-    </button>
-
-  </div>
-
-) : (
-
-  post.allowComments !== false && (
-
-    <div className="flex items-center space-x-2 mt-2">
-
-      <input
-        type="text"
-        value={commentInputs[post._id] || ""}
-        onChange={(e) =>
-          setCommentInputs({
-            ...commentInputs,
-            [post._id]: e.target.value
-          })
-        }
-        placeholder="Add a comment..."
-        className="flex-1 border rounded-xl p-2 text-sm
-                   focus:outline-none focus:ring-2 focus:ring-purple-500
-                   bg-gray-50 dark:bg-gray-800
-                   border-gray-200 dark:border-gray-700"
-      />
-
-      <button
-        onClick={() => handleComment(post._id)}
-        disabled={commentLoading[post._id]}
-        className={`px-3 py-2 rounded-xl transition active:scale-95 ${
-          commentLoading[post._id]
-            ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-            : "bg-purple-600 text-white hover:bg-purple-700"
-        }`}
-      >
-        {commentLoading[post._id] ? "Posting..." : "Post"}
-      </button>
-
+      </div>
     </div>
 
-  )
 
-)} 
 
-    </div>
-
-  </div>
-
-))
-
-)}
+{/* Feed end helpers */}
 {loadingMore && <PostSkeleton />}
-<div ref={observerRef} className="h-10"></div>
-</div>
+<div ref={observerRef} className="h-10"></div> 
 
     {/* Edit Post Modal */}
-    {editPost && (
+  {editPost && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white dark:bg-gray-900 dark:bg-gray-900 p-4 rounded-lg shadow-lg w-80 relative">
           {/* Close Button */}
@@ -2304,6 +2244,90 @@ const sendPrivateFeedback = async (postId) => {
     </div>
   </div>
 )}
+
+{/* Private Feedback Modal */}
+{activeFeedbackPost && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+    <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl shadow-xl max-h-[80vh] overflow-hidden flex flex-col">
+
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+          Private Feedback
+        </h2>
+
+        <button
+          onClick={() => setActiveFeedbackPost(null)}
+          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+        >
+          <FiX className="w-5 h-5 text-gray-500" />
+        </button>
+
+      </div>
+
+      {/* Feedback List */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+
+        {activeFeedbackPost.privateFeedback?.length > 0 ? (
+
+          activeFeedbackPost.privateFeedback.map((feedback, index) => (
+
+            <div
+              key={index}
+              className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800"
+            >
+
+              <div className="flex items-center space-x-2 mb-2">
+
+                <a href={`/profile/${feedback.user?.username}`}>
+                  {getAvatar(
+                    imageUrl(feedback.user?.profilePicture),
+                    feedback.user?.username,
+                    8
+                  )}
+                </a>
+
+                <div className="flex flex-col">
+
+                  <a
+                    href={`/profile/${feedback.user?.username}`}
+                    className="text-sm font-semibold hover:underline text-gray-800 dark:text-gray-200"
+                  >
+                    {feedback.user?.username || "User"}
+                  </a>
+
+                  <span className="text-xs text-gray-500">
+                    {new Date(feedback.createdAt).toLocaleString()}
+                  </span>
+
+                </div>
+
+              </div>
+
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                {feedback.text}
+              </p>
+
+            </div>
+
+          ))
+
+        ) : (
+
+          <p className="text-sm text-gray-500 text-center">
+            No feedback yet
+          </p>
+
+        )}
+
+      </div>
+
+    </div>
+
+  </div>
+)}
                 </div>
               </div>
             </div>
@@ -2314,101 +2338,6 @@ const sendPrivateFeedback = async (postId) => {
   </div>
 )}
 
-{/* Private Feedback Modal */}
-{activeFeedbackPost && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-
-    <div className="bg-white dark:bg-gray-900 w-full max-w-md max-h-[80vh] rounded-2xl shadow-xl relative flex flex-col">
-
-      {/* Header */}
-      <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between rounded-t-2xl">
-
-        <div>
-          <h2 className="font-semibold text-lg text-gray-800 dark:text-gray-100">
-            Private Feedback
-          </h2>
-
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {activeFeedbackPost?.privateFeedback?.length || 0} feedbacks
-          </p>
-        </div>
-
-        <button
-          onClick={() => setActiveFeedbackPost(null)}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-        >
-          <FiX className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-        </button>
-      </div>
-
-      {/* Feedback List (SCROLL AREA) */}
-      <div className="p-4 space-y-3 overflow-y-auto flex-1">
-
-        {activeFeedbackPost?.privateFeedback?.length > 0 ? (
-          activeFeedbackPost.privateFeedback.map((feedback, i) => {
-            if (!feedback) return null;
-
-            const username = feedback?.user?.username || "User";
-            const avatarSrc = imageUrl(feedback?.user?.profilePicture);
-
-            return (
-              <div
-                key={feedback._id || i}
-                className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3"
-              >
-
-                <div className="flex items-start space-x-3">
-
-                  {/* Avatar */}
-                  <a href={`/profile/${username}`}>
-                    {getAvatar(avatarSrc, username, 8)}
-                  </a>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-
-                    {/* Username + Date */}
-                    <div className="flex items-center justify-between">
-
-                      <a
-                        href={`/profile/${username}`}
-                        className="font-medium text-sm hover:underline text-gray-800 dark:text-gray-200"
-                      >
-                        {username}
-                      </a>
-
-                      {feedback?.createdAt && (
-                        <span className="text-[11px] text-gray-400">
-                          {new Date(feedback.createdAt).toLocaleDateString()}
-                        </span>
-                      )}
-
-                    </div>
-
-                    {/* Feedback text */}
-                    <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 break-words">
-                      {feedback?.text || ""}
-                    </p>
-
-                  </div>
-                </div>
-
-              </div>
-            );
-          })
-        ) : (
-          <div className="py-10 text-center">
-            <FiMessageCircle className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              No feedback yet
-            </p>
-          </div>
-        )}
-
-      </div>
-    </div>
-  </div>
-)}
 
 	 {fullImage && (                                                                                                         <FullImageModal
     imageUrl={fullImage}

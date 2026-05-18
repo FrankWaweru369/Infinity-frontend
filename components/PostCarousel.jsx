@@ -16,18 +16,22 @@ const PostCarousel = ({ images = [], onImageClick }) => {
     >
       {images.map((img, i) => (
         <SwiperSlide key={i}>
-          <img
-            src={img}
-            onClick={(e) => {
-              e.stopPropagation();
-              onImageClick?.();
-            }}
-            style={{
-              width: "100%",
-              objectFit: "cover",
-              cursor: "pointer",
-            }}
-          />
+
+         <div
+  className="w-full aspect-[3/4]
+             overflow-hidden rounded-2xl
+             bg-gray-100 dark:bg-gray-800"
+>
+  <img
+    src={img}
+    onClick={(e) => {
+      e.stopPropagation();
+      onImageClick?.();
+    }}
+    className="w-full h-full object-cover object-top cursor-pointer"
+  />
+</div> 
+
         </SwiperSlide>
       ))}
     </Swiper>
