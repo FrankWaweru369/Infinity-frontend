@@ -81,15 +81,54 @@ const [expandedComments, setExpandedComments] = useState({});
 const [recommentInputs, setRecommentInputs] = useState({});
 const [recommentLoading, setRecommentLoading] = useState({});
 const [fullscreenImages, setFullscreenImages] = useState([]);
+const [feedbackInputs, setFeedbackInputs] = useState({});
+const [feedbackLoading, setFeedbackLoading] = useState({});
+const [activeFeedbackPost, setActiveFeedbackPost] = useState(null);
+const [expandedPosts, setExpandedPosts] = useState({});
+
+const [loading, setLoading] = useState(true);
+const [loadingMore, setLoadingMore] = useState(false);
+
+const [hasMore, setHasMore] = useState(true);
+
+const observerRef = useRef(null);
 
 const dropdownRef = useRef(null);
+
+useEffect(() => {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (
+        entries[0].isIntersecting &&
+        !loadingMore &&
+        hasMore
+      ) {
+        fetchMoreUserPosts();
+      }
+    },
+    {
+      root: null,
+      rootMargin: "2000px",
+      threshold: 0,
+    }
+  );
+
+  const current = observerRef.current;
+
+  if (current) observer.observe(current);
+
+  return () => {
+    if (current) observer.unobserve(current);
+  };
+}, [loadingMore, hasMore, userPosts]);
+
 
 useEffect(() => {
   try {
     const token = localStorage.getItem("token");
     if (token) {
       const payload = JSON.parse(atob(token.split(".")[1]));
-      setCurrentUserId(payload.id); // correct user id
+      setCurrentUserId(payload.id);
     }
   } catch (err) {
     console.error("Token decode error:", err);
@@ -246,79 +285,135 @@ const toggleCommentExpansion = (postId, commentId) => {
     fetchUser();
   }, [router.isReady, username]);
 
+const fetchUserPosts = async () => {
+  setLoading(true);
+
+  try {
+    const res = await axios.get(
+      `${API_BASE}/posts/user/${username}?limit=7`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    const posts = res.data || [];
+
+    setUserPosts(posts);
+
+    setHasMore(posts.length === 7);
 
 
-  // Filter posts from PostsContext for this user
-useEffect(() => {
-  if (!username) return;
-  if (!posts || posts.length === 0) {
-    setUserPosts([]);
-    return;
-  }
+    // Initialize liked status
+    const token = localStorage.getItem("token");
 
-  const filtered = posts.filter((p) => p.author?.username === username);
-  
-  // Process posts to ensure all comment/recomment fields exist and are properly structured
-  const processedPosts = filtered.map(post => ({
-    ...post,
-    comments: post.comments?.map(comment => ({
-      _id: comment._id || `comment-${Math.random()}`,
-      user: comment.user || { username: 'Unknown', _id: '' },
-      text: comment.text || '',
-      likes: comment.likes || [],
-      likeCount: comment.likeCount || comment.likes?.length || 0,
-      recomments: comment.recomments?.map(recomment => ({
-        _id: recomment._id || `recomment-${Math.random()}`,
-        user: recomment.user || { username: 'Unknown', _id: '' },
-        text: recomment.text || '',
-        likes: recomment.likes || [],
-        likeCount: recomment.likeCount || recomment.likes?.length || 0,
-        createdAt: recomment.createdAt || new Date()
-      })) || [],
-      recommentCount: comment.recommentCount || comment.recomments?.length || 0,
-      createdAt: comment.createdAt || new Date()
-    })) || []
-  }));
-  
-  // Sort newest to oldest
-  processedPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  setUserPosts(processedPosts);
+    if (token) {
+      try {
 
-  // ✅ INITIALIZE likedPosts state
-  const token = localStorage.getItem("token");
-  if (token) {
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      const currentUserId = payload.id;
+        const payload = JSON.parse(
+          atob(token.split(".")[1])
+        );
 
-      const likedPostsObj = {};
-      processedPosts.forEach(post => {
-        let userLiked = false;
+        const currentUserId = payload.id;
 
-        if (post.likes && Array.isArray(post.likes)) {
-          userLiked = post.likes.some(like => {
-            if (typeof like === 'string') {
-              return like === currentUserId;
-            } else if (like._id) {
-              return like._id === currentUserId;
-            } else if (like.user?._id) {
-              return like.user._id === currentUserId;
-            }
-            return false;
-          });
-        }
+        const likedObj = {};
 
-        likedPostsObj[post._id] = userLiked;
-      });
+        posts.forEach((post) => {
 
-      setLikedPosts(likedPostsObj);
-    } catch (error) {
-      console.error("Error initializing likedPosts:", error);
+          likedObj[post._id] =
+            post.likes?.some((like) => {
+
+              // likes: ["userid"]
+              if (typeof like === "string") {
+                return like === currentUserId;
+              }
+
+              // likes: [{_id:"userid"}]
+              if (like?._id) {
+                return like._id === currentUserId;
+              }
+
+              // likes: [{user:{_id:"userid"}}]
+              if (like?.user?._id) {
+                return like.user._id === currentUserId;
+              }
+
+              return false;
+
+            }) || false;
+
+        });
+
+
+        setLikedPosts(likedObj);
+
+
+      } catch (decodeErr) {
+        console.error(
+          "Token decode failed",
+          decodeErr
+        );
+      }
     }
+
+
+  } catch (err) {
+
+    console.error(
+      "Failed loading user posts",
+      err
+    );
+
+  } finally {
+
+    setLoading(false);
+
   }
-}, [username, posts]);
+};
+
+ useEffect(() => {
+  if (!username) return;
+
+  setUserPosts([]);
+  setHasMore(true);
+
+  fetchUserPosts();
+
+}, [username]);
 
 
+const fetchMoreUserPosts = async () => {
+  if (loadingMore || !hasMore) return;
+
+  setLoadingMore(true);
+
+  try {
+    const lastPostId =
+      userPosts[userPosts.length - 1]?._id;
+
+    const res = await axios.get(
+      `${API_BASE}/posts/user/${username}?limit=7&lastPostId=${lastPostId}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    const newPosts = res.data;
+
+    if (!newPosts || newPosts.length === 0) {
+      setHasMore(false);
+    } else {
+      setUserPosts((prev) => [
+        ...prev,
+        ...newPosts,
+      ]);
+    }
+
+  } catch (err) {
+    console.error("Error loading more posts:", err);
+  } finally {
+    setLoadingMore(false);
+  }
+};
 
 // When user is fetched, populate form 
 useEffect(() => {
@@ -1255,11 +1350,12 @@ const getAvatar = (src, username, size = 8) => {
   };
 
   const sizeClasses = {
-    6: 'w-6 h-6 text-xs',
-    8: 'w-8 h-8 text-sm',
-    12: 'w-12 h-12 text-base',
-    16: 'w-16 h-16 text-lg'
-  };
+  6: 'w-6 h-6 text-xs',
+  8: 'w-8 h-8 text-sm',                                                                    10: 'w-10 h-10 text-sm',
+  12: 'w-12 h-12 text-base',
+  14: 'w-14 h-14 text-base',
+  16: 'w-16 h-16 text-lg'
+};
 
   if (src) {
     return (
@@ -1283,6 +1379,83 @@ const getAvatar = (src, username, size = 8) => {
   if (loadingUser) return <p className="p-5 text-center">Loading user...</p>;
   if (notFound) return <p className="p-5 text-center">User not found</p>;
   if (!user) return <p className="p-5 text-center">User not found</p>;
+
+
+const sendPrivateFeedback = async (postId) => {
+  const text = feedbackInputs[postId];
+
+  if (!text?.trim()) {
+    return;
+  }
+
+  try {
+    setFeedbackLoading((prev) => ({
+      ...prev,
+      [postId]: true,
+    }));
+
+    const res = await axios.post(
+      `${API_BASE}/posts/${postId}/feedback`,
+      { text },
+      {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      }
+    );
+
+    const newFeedback = res.data.feedback;
+
+    // Update profile posts instantly
+    setUserPosts((prev) =>
+      prev.map((post) =>
+        post._id === postId
+          ? {
+              ...post,
+              privateFeedback: [
+                ...(post.privateFeedback || []),
+                newFeedback,
+              ],
+            }
+          : post
+      )
+    );
+
+    // Update feedback modal instantly if open
+    if (activeFeedbackPost?._id === postId) {
+      setActiveFeedbackPost((prev) => ({
+        ...prev,
+        privateFeedback: [
+          ...(prev.privateFeedback || []),
+          newFeedback,
+        ],
+      }));
+    }
+
+    // Clear input
+    setFeedbackInputs((prev) => ({
+      ...prev,
+      [postId]: "",
+    }));
+
+  } catch (err) {
+    console.error(
+      "Private feedback error:",
+      err.response?.data || err.message
+    );
+
+    alert(
+      err.response?.data?.message ||
+      "Failed to send feedback"
+    );
+
+  } finally {
+    setFeedbackLoading((prev) => ({
+      ...prev,
+      [postId]: false,
+    }));
+  }
+};
 
   return (
         <div className="min-h-screen bg-gray-50 dark:bg-infinityBgDark pb-6">
@@ -1783,30 +1956,162 @@ const getAvatar = (src, username, size = 8) => {
         ) : userPosts.length === 0 ? (
           <p className="text-center text-gray-500 dark:text-infinityTextSecondaryDark">No posts yet.</p>
         ) : (
-          userPosts.map((post) => {
+          userPosts.map((post, index) => {
+	    const isLast = index === userPosts.length - 1;
             const postId = post._id;
             const likedByUser =
               Array.isArray(post.likes) &&
               post.likes.some((u) => (u && u._id ? u._id === currentUserId : u === currentUserId));
             return (
-              <div key={postId} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">              
+              <div
+  key={postId}
+  ref={isLast ? observerRef : null}
+  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4"
+>              
 		    {/* Header */}
-                <div className="flex items-start justify-between">
-                  <div
-                    className="flex items-center space-x-3 mb-3 cursor-pointer"
-                    onClick={() => router.push(`/profile/${post.author?.username ?? "guest"}`)}
-                  >
-                    {getAvatar(imageUrl(post.author?.profilePicture), post.author?.username, 8)}
-                    <span className="font-semibold">{post.author?.username ?? "unknown"}</span>
-                  </div>
+<div className="flex justify-between items-center mb-3">
 
-                  <div className="text-sm text-gray-500 dark:text-infinityTextSecondaryDark">
-                    {post.createdAt ? new Date(post.createdAt).toLocaleString() : ""}
-                  </div>
-                </div>
+  <a
+    href={`/profile/${post.author?.username}`}
+    className="
+      flex items-center space-x-3
+      hover:opacity-80 transition
+      min-w-0
+    "
+  >
+
+    {getAvatar(
+      imageUrl(post.author?.profilePicture),
+      post.author?.username,
+      10
+    )}
+
+
+    <div className="flex flex-col min-w-0">
+
+      <span
+        className="
+          font-bold text-[17px]
+          hover:underline
+          truncate max-w-[160px]
+          text-gray-900 dark:text-gray-100
+        "
+      >
+        {post.author?.username ?? "unknown"}
+      </span>
+
+
+      {post.visibility === "private" ? (
+
+        <span
+          className="
+            text-[11px]
+            text-purple-700 dark:text-purple-300
+            font-medium
+            bg-purple-100 dark:bg-purple-900/30
+            px-2 py-0.5 rounded-full w-fit
+          "
+        >
+          Private
+        </span>
+
+      ) : post.visibility === "personal" ? (
+
+        <span
+          className="
+            text-[11px]
+            text-indigo-700 dark:text-indigo-300
+            font-medium
+            bg-indigo-100 dark:bg-indigo-900/30
+            px-2 py-0.5 rounded-full w-fit
+          "
+        >
+          Personal
+        </span>
+
+      ) : null}
+
+    </div>
+
+  </a>
+
+
+  <span
+    className="
+      text-xs
+      text-gray-500
+      dark:text-infinityTextSecondaryDark
+    "
+  >
+    {post.createdAt
+      ? new Date(post.createdAt).toLocaleString()
+      : ""}
+  </span>
+
+</div>
 
                 {/* Content */}
-                {post.content && <p className="mb-2 text-sm">{post.content}</p>}
+{post.content && (
+  <div className="mb-3">
+
+    <p
+      className={`text-[15px]
+        leading-relaxed
+        text-gray-800
+        dark:text-gray-100
+        whitespace-pre-line
+        break-words
+        transition-all duration-200
+        ${
+          expandedPosts[post._id]
+            ? ""
+            : post.images?.length > 0 || post.image
+            ? "line-clamp-4"
+            : "line-clamp-5"
+        }`}
+    >
+      {post.content}
+    </p>
+
+
+    {post.content.trim().split(/\s+/).length > 45 && (
+
+      <button
+        onClick={() =>
+          setExpandedPosts((prev) => ({
+            ...prev,
+            [post._id]: !prev[post._id],
+          }))
+        }
+        className="
+          mt-1
+          flex items-center
+          text-sm font-medium
+          text-purple-600
+          dark:text-purple-400
+          hover:text-purple-700
+          transition
+        "
+      >
+
+        {expandedPosts[post._id] ? (
+          <>
+            Show less
+            <span className="ml-1 rotate-180">⌄</span>
+          </>
+        ) : (
+          <>
+            Show more
+            <span className="ml-1">⌄</span>
+          </>
+        )}
+
+      </button>
+
+    )}
+
+  </div>
+)}
 
                 {/* Image */}
                 {(post.images?.length > 0 || post.image) && (
@@ -1834,203 +2139,291 @@ const getAvatar = (src, username, size = 8) => {
   </div>
 )}
 
-                {/* Actions */}
-                <div className="flex items-center w-full mt-3 text-gray-600 relative">
-                  {/* Like Button in profile page posts */}
-<button
-  onClick={() => handleLike(post)}
-  disabled={actionLoading[post._id]}
-  className="flex flex-col items-center"
->
-  {likedPosts[post._id] ? (
-    <FaHeart className="w-5 h-5 text-red-500" />
-  ) : (
-    <FiHeart className="w-5 h-5 text-gray-500 hover:text-red-500" />
-  )}
-  <span className="text-xs mt-1">{post.likes?.length || 0}</span>
-</button>
+               {/* Actions */}
+<div className="flex items-center justify-between mt-4 relative">
 
-                  {/* clickable count opens list */}
-                  <button
-                    onClick={() => toggleLikesList(post._id)}
-                    className="text-sm text-gray-500 underline ml-3"
-                  >
-                    {post.likes?.length ? "View likers" : "Be first to like"}
-                  </button>
+  <div className="flex items-center space-x-4">
 
-                 {/* Likes list dropdown/modal - Simplified with gray background */}
-{likesListOpenFor === post._id && (
-  <div className="absolute left-4 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg p-3 w-60 z-50">
-    {/* Header with subtle gray background */}
-    <div className="text-sm font-semibold mb-3 pb-2 border-b border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded-t">
-      Liked by ({post.likes?.length || 0})
-    </div>
-    
-    {/* List with alternating background for better separation */}
-    <div className="max-h-48 overflow-y-auto bg-gray-50/30 dark:bg-gray-900/30 rounded">
-      {post.likes && post.likes.length ? (
-        post.likes.map((u, index) => (
-          <a
-            key={u._id}
-            href={`/profile/${u.username}`}
-            className={`flex items-center space-x-3 p-2 transition ${
-              index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'
-            } ${
-              index !== post.likes.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''
-            } hover:bg-purple-50 dark:hover:bg-gray-700`}
-          >
-            {/* Avatar with border */}
-            <div className="w-8 h-8 rounded-full border-2 border-purple-200 dark:border-purple-800 overflow-hidden bg-white dark:bg-gray-800">
-              {getAvatar(imageUrl(u.profilePicture), u.username, 8)}
-            </div>
-            
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-100">{u.username}</span>
-          </a>
-        ))
+    {/* LIKE BUTTON */}
+    {post.allowLikes !== false && (
+  <>
+    <button
+      onClick={() => handleLike(post)}
+      disabled={actionLoading[post._id]}
+      className="flex items-center justify-center space-x-2
+                 min-w-[58px] px-3 py-2 rounded-xl
+                 bg-gray-100/70 dark:bg-gray-800
+                 hover:bg-gray-200 dark:hover:bg-gray-700
+                 transition active:scale-90"
+    >
+      {likedPosts[post._id] ? (
+        <FaHeart className="w-5 h-5 text-red-500" />
       ) : (
-        <div className="py-6 text-center bg-white dark:bg-gray-800 rounded">
-          <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-900 flex items-center justify-center mx-auto mb-2">
-            <FiHeart className="w-5 h-5 text-gray-400 dark:text-gray-400" />
-          </div>
-          <p className="text-sm text-gray-500 dark:text-gray-300">No likes yet</p>
-          <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">Be the first to like</p>
+        <FiHeart className="w-5 h-5 text-gray-500 hover:text-red-500" />
+      )}
+
+      <span className="text-sm text-gray-700 dark:text-gray-300">
+        {post.likes?.length || 0}
+      </span>
+    </button>
+
+    <button
+      onClick={() => toggleLikesList(post._id)}
+      className="px-3 py-2 rounded-xl
+                 bg-gray-100/70 dark:bg-gray-800
+                 text-sm text-gray-600 dark:text-gray-300
+                 hover:bg-gray-200 dark:hover:bg-gray-700
+                 transition active:scale-95"
+    >
+      {post.likes?.length ? "View likers" : "Be first to like"}
+    </button>
+  </>
+)}
+
+    {/* COMMENTS / PRIVATE FEEDBACK */}
+
+{post.visibility === "private" ? (
+
+  post.author?._id === currentUserId && (
+
+    <button
+      onClick={() => setActiveFeedbackPost(post)}
+      className="
+        flex items-center space-x-2 px-3 py-2 rounded-xl
+        bg-gray-100/70 dark:bg-gray-800
+        hover:bg-gray-200 dark:hover:bg-gray-700
+        transition active:scale-90
+      "
+    >
+
+      <FiMessageCircle
+        className="w-5 h-5 text-gray-500 dark:text-gray-300"
+      />
+
+      <span className="text-sm text-gray-700 dark:text-gray-300">
+        {post.privateFeedback?.length || 0}
+      </span>
+
+    </button>
+
+  )
+
+) : (
+
+  post.allowComments !== false && (
+
+    <button
+      onClick={() => setActiveCommentsPost(post)}
+      className="
+        flex items-center space-x-2 px-3 py-2 rounded-xl
+        bg-gray-100/70 dark:bg-gray-800
+        hover:bg-gray-200 dark:hover:bg-gray-700
+        transition active:scale-90
+      "
+    >
+
+      <FiMessageCircle
+        className="w-5 h-5 text-gray-500 dark:text-gray-300"
+      />
+
+      <span className="text-sm text-gray-700 dark:text-gray-300">
+        {post.comments?.length || 0}
+      </span>
+
+    </button>
+
+  )
+
+)}
+
+  </div>
+
+  {/* Three-dot menu */}
+  {post.author?._id === currentUserId && (
+    <div className="relative">
+
+      <button
+        onClick={() =>
+          setMenuOpenFor(
+            menuOpenFor === post._id ? null : post._id
+          )
+        }
+        className="p-2 rounded-full
+                   hover:bg-gray-200 dark:hover:bg-gray-700
+                   transition"
+      >
+        <FiMoreHorizontal className="w-5 h-5" />
+      </button>
+
+      {menuOpenFor === post._id && (
+        <div
+          ref={dropdownRef}
+          className="absolute right-0 mt-2 w-28
+                     bg-white dark:bg-gray-900
+                     border border-gray-200 dark:border-gray-700
+                     rounded-xl shadow-lg z-50"
+        >
+          <button
+            onClick={() => handleEdit(post)}
+            className="w-full text-left px-3 py-2
+                       text-blue-500 text-sm
+                       hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            Edit
+          </button>
+
+          <button
+            onClick={() => handleDelete(post._id)}
+            className="w-full text-left px-3 py-2
+                       text-red-500 text-sm
+                       hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            Delete
+          </button>
         </div>
       )}
     </div>
-    
-    {/* Footer with subtle gray background */}
-    <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 text-right bg-gray-50/50 dark:bg-gray-900/50 px-2 py-1 rounded-b">
-      <button
-        onClick={() => setLikesListOpenFor(null)}
-        className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-1"
-      >
-        Close
-      </button>
-    </div>
-  </div>
-)} 
-
-                  {/* Comment Count */}
-                  <div className="flex items-center space-x-1 ml-4">
-                    <FiMessageCircle className="w-5 h-5" />
-                    <span>{post.comments?.length || 0}</span>
-                  </div>
-
-                  {/* Three-dot menu for Edit/Delete */}
-{post.author?._id === currentUserId && (
-  <div className="ml-auto relative">
-    {/* Menu Button */}
-    <button
-      onClick={() =>
-        setMenuOpenFor(menuOpenFor === post._id ? null : post._id)
-      }
-      className="p-1 hover:bg-gray-200 rounded-full"
-    >
-      <FiMoreHorizontal className="w-5 h-5" />
-    </button>
-
-    {/* Dropdown */}
-    {menuOpenFor === post._id && (
-      <div
-        ref={dropdownRef}
-        className="absolute right-0 mt-2 w-24 bg-white dark:bg-gray-900 border rounded shadow-md z-50"
-      >
-        <button
-          onClick={() => handleEdit(post)}
-          className="w-full text-left px-3 py-1 text-blue-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
-        >
-          Edit
-        </button>
-        <button
-          onClick={() => handleDelete(post._id)} 
-          className="w-full text-left px-3 py-1 text-red-500 text-sm hover:bg-gray-100 dark:bg-gray-800"
-        >
-          Delete
-        </button>
-      </div>
-    )}
-  </div>
-)}
-                           
-	</div>
-
-                  
-      {/* Comments */}
-<div className="mt-3 space-y-2">
-  {post.comments && post.comments.length > 0 ? (
-    <>
-      {/* Show top comment only */}
-      {post.comments.slice(0, 1).map((c, i) => {
-        const username = c.user?.username ?? "user";
-        const avatarSrc = imageUrl(c.user?.profilePicture);
-        const text = c.text ?? c;
-        return (
-          <div
-            key={i}
-            className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700"
-          >
-            {/* Avatar */}
-            <a href={`/profile/${c.user.username}`}>
-              {getAvatar(avatarSrc, username, 8)}
-            </a>
-
-            {/* Username + Comment */}
-            <div className="flex flex-col">
-              <a
-                href={`/profile/${c.user.username}`}
-                className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-100"
-              >
-                {username}
-              </a>
-              <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-200 dark:border-purple-700">
-                {text}
-              </p>
-            </div>
-          </div>
-        );
-      })}
-
-      {/* View all comments button */}
-      {post.comments.length > 1 && (
-        <button
-          onClick={() => setActiveCommentsPost(post)}
-          className="text-xs text-purple-600 hover:underline focus:outline-none dark:text-purple-400 dark:hover:text-purple-300"
-        >
-          View all {post.comments.length} comments
-        </button>
-      )}
-    </>
-  ) : (
-    <p className="text-sm text-gray-400 dark:text-gray-400">No comments yet</p>
   )}
 
-  {/* Comment input */}
+</div> 
+
+                  
+     {/* Comments */}
+<div className="mt-3 space-y-2">
+  {post.allowComments !== false && (
+
+    post.comments && post.comments.length > 0 ? (
+
+      <>
+        {/* Show latest comment */}
+        {post.comments.slice(-1).map((c, i) => {
+
+          const username = c.user?.username ?? "user";
+          const avatarSrc = imageUrl(c.user?.profilePicture);
+          const text = c.text ?? c;
+
+          return (
+            <div
+              key={i}
+              className="flex items-start space-x-2 border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800"
+            >
+              {/* Avatar */}
+              <a href={`/profile/${c.user?.username}`}>
+                {getAvatar(avatarSrc, username, 8)}
+              </a>
+
+              {/* Username + Comment */}
+              <div className="flex flex-col">
+                <a
+                  href={`/profile/${c.user?.username}`}
+                  className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-300"
+                >
+                  {username}
+                </a>
+
+                <p className="text-gray-700 dark:text-gray-100 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:border-purple-700">
+                  {text}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* View all comments */}
+        {post.comments.length > 1 && (
+          <button
+            onClick={() => setActiveCommentsPost(post)}
+            className="text-xs text-purple-600 dark:text-purple-400 hover:underline focus:outline-none"
+          >
+            View all {post.comments.length} comments
+          </button>
+        )}
+      </>
+    ) : (
+      <p className="text-sm text-gray-400 dark:text-gray-500">
+        No comments yet
+      </p>
+    )
+
+  )}
+</div> 
+
+  {/* Comment / Feedback Input */}
+{post.visibility === "private" ? (
+
   <div className="flex items-center space-x-2 mt-2">
+
     <input
       type="text"
-      value={commentInputs[post._id]}
+      value={feedbackInputs[post._id] || ""}
       onChange={(e) =>
-        setCommentInputs({
-          ...commentInputs,
-          [post._id]: e.target.value,
+        setFeedbackInputs({
+          ...feedbackInputs,
+          [post._id]: e.target.value
         })
       }
-      placeholder="Add a comment..."
-      className="flex-1 border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+      placeholder="Send private feedback..."
+      className="flex-1 border rounded-xl p-2 text-sm
+                 focus:outline-none focus:ring-2 focus:ring-purple-500
+                 bg-gray-50 dark:bg-gray-800
+                 border-gray-200 dark:border-gray-700
+                 text-gray-900 dark:text-gray-100"
     />
+
     <button
-      onClick={() => handleComment(post._id)}
-      disabled={commentLoading[post._id]}
-      className={`px-3 py-1 rounded ${
-        commentLoading[post._id]
-          ? "bg-gray-400 text-gray-200 cursor-not-allowed dark:bg-gray-600 dark:text-gray-300"
-          : "bg-purple-600 text-white hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 dark:text-gray-100"
+      onClick={() => sendPrivateFeedback(post._id)}
+      disabled={feedbackLoading[post._id]}
+      className={`px-3 py-2 rounded-xl transition active:scale-95 ${
+        feedbackLoading[post._id]
+          ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+          : "bg-purple-600 text-white hover:bg-purple-700"
       }`}
     >
-      {commentLoading[post._id] ? "Posting..." : "Post"}
+      {feedbackLoading[post._id] ? "Sending..." : "Send"}
     </button>
+
   </div>
-</div>
+
+) : (
+
+  post.allowComments !== false && (
+
+    <div className="flex items-center space-x-2 mt-2">
+
+      <input
+        type="text"
+        value={commentInputs[post._id] || ""}
+        onChange={(e) =>
+          setCommentInputs({
+            ...commentInputs,
+            [post._id]: e.target.value
+          })
+        }
+        placeholder="Add a comment..."
+        className="flex-1 border rounded-xl p-2 text-sm
+                   focus:outline-none focus:ring-2 focus:ring-purple-500
+                   bg-gray-50 dark:bg-gray-800
+                   border-gray-200 dark:border-gray-700
+                   text-gray-900 dark:text-gray-100"
+      />
+
+      <button
+        onClick={() => handleComment(post._id)}
+        disabled={commentLoading[post._id]}
+        className={`px-3 py-2 rounded-xl transition active:scale-95 ${
+          commentLoading[post._id]
+            ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+            : "bg-purple-600 text-white hover:bg-purple-700"
+        }`}
+      >
+        {commentLoading[post._id] ? "Posting..." : "Post"}
+      </button>
+
+    </div>
+
+  )
+
+)}
 </div>
 );
 })
@@ -2421,6 +2814,182 @@ const getAvatar = (src, username, size = 8) => {
     </div>
   </div>
 )}
+
+{activeFeedbackPost && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+
+    <div className="
+      bg-white dark:bg-gray-900
+      w-full max-w-md max-h-[80vh]
+      rounded-2xl shadow-xl
+      relative flex flex-col
+    ">
+
+      {/* Header */}
+      <div className="
+        sticky top-0
+        bg-white dark:bg-gray-900
+        border-b border-gray-200 dark:border-gray-700
+        px-4 py-3
+        flex items-center justify-between
+        rounded-t-2xl
+      ">
+
+        <div>
+
+          <h2 className="
+            font-semibold text-lg
+            text-gray-800 dark:text-gray-100
+          ">
+            Private Feedback
+          </h2>
+
+          <p className="
+            text-xs text-gray-500 dark:text-gray-400
+          ">
+            {activeFeedbackPost?.privateFeedback?.length || 0} feedbacks
+          </p>
+
+        </div>
+
+
+        <button
+          onClick={() => setActiveFeedbackPost(null)}
+          className="
+            p-2 rounded-full
+            hover:bg-gray-100
+            dark:hover:bg-gray-800
+            transition
+          "
+        >
+          <FiX className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+        </button>
+
+      </div>
+
+
+      {/* Feedback List */}
+      <div className="
+        p-4 space-y-3
+        overflow-y-auto flex-1
+      ">
+
+
+        {activeFeedbackPost?.privateFeedback?.length > 0 ? (
+
+          activeFeedbackPost.privateFeedback.map((feedback, i) => {
+
+            if (!feedback) return null;
+
+
+            const username =
+              feedback.user?.username || "User";
+
+            const avatarSrc =
+              imageUrl(feedback.user?.profilePicture);
+
+
+            return (
+
+              <div
+                key={feedback._id || i}
+                className="
+                  bg-gray-50 dark:bg-gray-800
+                  border border-gray-200 dark:border-gray-700
+                  rounded-xl p-3
+                "
+              >
+
+                <div className="flex items-start space-x-3">
+
+
+                  <Link href={`/profile/${username}`}>
+                    {getAvatar(
+                      avatarSrc,
+                      username,
+                      8
+                    )}
+                  </Link>
+
+
+                  <div className="flex-1 min-w-0">
+
+
+                    <div className="flex items-center justify-between">
+
+                      <Link
+                        href={`/profile/${username}`}
+                        className="
+                          font-medium text-sm
+                          hover:underline
+                          text-gray-800 dark:text-gray-200
+                        "
+                      >
+                        {username}
+                      </Link>
+
+
+                      {feedback.createdAt && (
+                        <span className="text-[11px] text-gray-400">
+
+                          {new Date(
+                            feedback.createdAt
+                          ).toLocaleDateString()}
+
+                        </span>
+                      )}
+
+                    </div>
+
+
+                    <p className="
+                      mt-1 text-sm
+                      text-gray-700 dark:text-gray-300
+                      break-words
+                    ">
+                      {feedback.text}
+                    </p>
+
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            );
+          })
+
+
+        ) : (
+
+          <div className="py-10 text-center">
+
+            <FiMessageCircle
+              className="
+                w-10 h-10
+                text-gray-300 dark:text-gray-600
+                mx-auto mb-2
+              "
+            />
+
+            <p className="
+              text-sm text-gray-500 dark:text-gray-400
+            ">
+              No feedback yet
+            </p>
+
+          </div>
+
+        )}
+
+      </div>
+
+    </div>
+
+  </div>
+)}
+
 
 {fullImage && (
   <FullImageModal

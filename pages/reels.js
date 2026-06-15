@@ -1371,7 +1371,7 @@ const handleLikeRecomment = async (commentId, recommentId) => {
         }}
       />
       <span className="font-bold text-sm drop-shadow-lg">
-        @{reel.author?.username}
+        {reel.author?.username}
       </span>
       <FollowButton targetUser={reel.author} />
     </div>

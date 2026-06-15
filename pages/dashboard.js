@@ -72,6 +72,7 @@ export default function Dashboard() {
   const [activeFeedbackPost, setActiveFeedbackPost] = useState(null);
   const [feedbackInputs, setFeedbackInputs] = useState({});
   const [feedbackLoading, setFeedbackLoading] = useState({});
+  const [expandedPosts, setExpandedPosts] = useState({});
   const observerRef = useRef(null);
 
 
@@ -800,12 +801,14 @@ const handleComment = async (postId) => {
       return name.split(' ').map(word => word.charAt(0).toUpperCase()).join('').slice(0, 2);
     };
 
-    const sizeClasses = {
-      6: 'w-6 h-6 text-xs',
-      8: 'w-8 h-8 text-sm',
-      12: 'w-12 h-12 text-base',
-      16: 'w-16 h-16 text-lg'
-    };
+   const sizeClasses = {
+  6: 'w-6 h-6 text-xs',
+  8: 'w-8 h-8 text-sm',
+  10: 'w-10 h-10 text-sm',
+  12: 'w-12 h-12 text-base',
+  14: 'w-14 h-14 text-base',
+  16: 'w-16 h-16 text-lg'
+};
 
     if (src) {
       return <img src={src} alt={username || "User"} className={`rounded-full ${sizeClasses[size]} object-cover`} />;
@@ -1465,22 +1468,33 @@ const sendPrivateFeedback = async (postId) => {
   <div className="min-h-screen bg-gray-50 dark:bg-infinityBgDark pb-6">
     {/* Header */}
 <div className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-white dark:bg-gray-900 shadow-sm overflow-visible">
+
   <h1 className="font-bold text-lg text-purple-600 dark:text-infinityPurpleDark">
     Infinity
   </h1>
 
   {user && (
-    <div className="flex items-center space-x-4 relative">
-      {/* 🔔 Notifications */}
+    <div className="flex items-center space-x-3 relative">
+
+      {/* Messages */}
+      <a
+        href="/messages"
+        className="relative p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition"
+      >
+        <FiMessageCircle className="w-5 h-5 text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark" />
+      </a>
+
+      {/* Notifications */}
       <Notifications token={token} />
 
       {/* Profile */}
       <a
         href={`/profile/${user.username}`}
-        className="flex items-center space-x-2 hover:opacity-80 transition"
+        className="flex items-center space-x-2 hover:opacity-80 transition min-w-0"
       >
         {getAvatar(imageUrl(user.profilePicture), user.username, 8)}
-        <span className="text-sm font-medium hover:underline dark:text-gray-100">
+
+        <span className="hidden sm:block text-sm font-medium hover:underline dark:text-gray-100 truncate max-w-[100px]">
           {user.username}
         </span>
       </a>
@@ -1497,27 +1511,31 @@ const sendPrivateFeedback = async (postId) => {
         {/* Dropdown Menu */}
         {isMenuOpen && (
           <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-            {/* Dark Mode Toggle Switch */}
+
+            {/* Dark Mode Toggle */}
             <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-700 dark:text-gray-300">Dark Mode</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Dark Mode
+                </span>
+
                 <button
                   onClick={toggleTheme}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
-                    isDarkMode ? 'bg-purple-600' : 'bg-gray-300'
+                    isDarkMode ? "bg-purple-600" : "bg-gray-300"
                   }`}
-                  aria-label={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
+                  aria-label={`Switch to ${isDarkMode ? "light" : "dark"} mode`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      isDarkMode ? 'translate-x-6' : 'translate-x-1'
+                      isDarkMode ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
                 </button>
               </div>
             </div>
 
-            {/* Logout Button with Red Background */}
+            {/* Logout */}
             <button
               onClick={() => {
                 handleLogout();
@@ -1527,6 +1545,7 @@ const sendPrivateFeedback = async (postId) => {
             >
               <span>Logout</span>
             </button>
+
           </div>
         )}
       </div>
@@ -1639,42 +1658,113 @@ const sendPrivateFeedback = async (postId) => {
 
   <div key={post._id} className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-4">
 
-    {/* Header */}
-    <div className="flex justify-between items-center mb-3">
-      <a
-  href={`/profile/${post.author?.username}`}
-  className="flex items-center space-x-3 hover:opacity-80 transition"
+   {/* Header */}
+<div className="flex justify-between items-center mb-3">
+
+  <a
+    href={`/profile/${post.author?.username}`}
+    className="flex items-center space-x-3 hover:opacity-80 transition min-w-0"
+  >
+
+    {getAvatar(
+      imageUrl(post.author?.profilePicture),
+      post.author?.username,
+      10
+    )}
+
+    <div className="flex flex-col min-w-0">
+
+      <span
+  className="font-bold text-[17px]
+             hover:underline
+             truncate max-w-[160px]
+             text-gray-900 dark:text-gray-100"
 >
-  {getAvatar(
-    imageUrl(post.author?.profilePicture),
-    post.author?.username,
-    8
-  )}
+  {post.author?.username}
+</span>
 
-  <div className="flex flex-col">
-    <span className="font-semibold hover:underline">
-      {post.author?.username}
-    </span>
+      {post.visibility === "private" ? (
 
-    {post.visibility === "private" ? (
-  <span className="text-[11px] text-purple-700 dark:text-purple-300 font-medium bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 rounded-full w-fit">
-    Private
-  </span>
-) : post.visibility === "personal" ? (
-  <span className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium bg-indigo-100 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full w-fit">
-    Personal
-  </span>
-) : null}
-  </div>
-</a>
+        <span
+          className="text-[11px]
+                     text-purple-700 dark:text-purple-300
+                     font-medium
+                     bg-purple-100 dark:bg-purple-900/30
+                     px-2 py-0.5 rounded-full w-fit"
+        >
+          Private
+        </span>
 
-      <span className="text-xs text-gray-500 dark:text-infinityTextSecondaryDark">
-        {new Date(post.createdAt).toLocaleString()}
-      </span>
+      ) : post.visibility === "personal" ? (
+
+        <span
+          className="text-[11px]
+                     text-indigo-700 dark:text-indigo-300
+                     font-medium
+                     bg-indigo-100 dark:bg-indigo-900/30
+                     px-2 py-0.5 rounded-full w-fit"
+        >
+          Personal
+        </span>
+
+      ) : null}
+
     </div>
 
+  </a>
+
+  <span className="text-xs text-gray-500 dark:text-infinityTextSecondaryDark">
+    {new Date(post.createdAt).toLocaleString()}
+  </span>
+
+</div>
+
     {/* Content */}
-    <p className="mb-2 text-sm">{post.content}</p>
+{post.content && (
+
+  <div className="mb-3">
+
+    <p
+      className={`text-[15px] leading-relaxed text-gray-800 dark:text-gray-100 whitespace-pre-line break-words transition-all duration-200 ${
+        expandedPosts[post._id]
+          ? ""
+          : post.images?.length > 0 || post.image
+          ? "line-clamp-4"
+          : "line-clamp-5"
+      }`}
+    >
+      {post.content}
+    </p>
+
+    {post.content.trim().split(/\s+/).length > 45 && (
+      <button
+        onClick={() =>
+          setExpandedPosts((prev) => ({
+            ...prev,
+            [post._id]: !prev[post._id],
+          }))
+        }
+        className="mt-1 flex items-center text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 transition"
+      >
+
+        {expandedPosts[post._id] ? (
+          <>
+            Show less
+            <span className="ml-1 rotate-180">⌄</span>
+          </>
+        ) : (
+          <>
+            Show more
+            <span className="ml-1">⌄</span>
+          </>
+        )}
+
+      </button>
+    )}
+
+  </div>
+
+)}
 
  {post.images?.length > 1 ? (
 
@@ -1874,38 +1964,46 @@ const sendPrivateFeedback = async (postId) => {
   post.comments && post.comments.length > 0 ? (
 
     <>
-      {/* Show top comment only */}
-      {post.comments.slice(0, 1).map((c, i) => {
-        const username = c.user?.username ?? "user";
-        const avatarSrc = imageUrl(c.user?.profilePicture);
-        const text = c.text ?? c;
+      {/* Show latest comment only */}
+{post.comments.slice(-1).map((c, i) => {
 
-        return (
-          <div
-            key={i}
-            className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700"
-          >
-            {/* Avatar */}
-            <a href={`/profile/${c.user?.username}`}>
-              {getAvatar(avatarSrc, username, 8)}
-            </a>
+  const username = c.user?.username ?? "user";
+  const avatarSrc = imageUrl(c.user?.profilePicture);
+  const text = c.text ?? c;
 
-            {/* Username + Comment */}
-            <div className="flex flex-col">
-              <a
-                href={`/profile/${c.user?.username}`}
-                className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-300"
-              >
-                {username}
-              </a>
+  return (
 
-              <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-100">
-                {text}
-              </p>
-            </div>
-          </div>
-        );
-      })}
+    <div
+      key={i}
+      className="flex items-start space-x-2 border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700"
+    >
+
+      {/* Avatar */}
+      <a href={`/profile/${c.user?.username}`}>
+        {getAvatar(avatarSrc, username, 8)}
+      </a>
+
+      {/* Username + Comment */}
+      <div className="flex flex-col">
+
+        <a
+          href={`/profile/${c.user?.username}`}
+          className="font-semibold text-sm hover:underline text-gray-800 dark:text-gray-300"
+        >
+          {username}
+        </a>
+
+        <p className="text-gray-700 text-sm pl-2 mt-1 border-l-2 border-purple-200 dark:text-gray-100">
+          {text}
+        </p>
+
+      </div>
+
+    </div>
+
+  );
+
+})}
 
       {/* View all comments button */}
       {post.comments.length > 1 && (

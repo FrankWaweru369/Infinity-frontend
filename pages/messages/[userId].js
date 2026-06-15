@@ -39,17 +39,6 @@ export default function ChatPage() {
     )}&background=7c3aed&color=fff`;
   };
 
-  const formatLastActive = (date) => {
-    if (!date) return "unknown";
-
-    const diff = (Date.now() - new Date(date)) / 1000;
-
-    if (diff < 60) return "just now";
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  };
-
   // 📥 FIXED FETCH (CRITICAL FIX HERE)
   const fetchMessages = async () => {
     if (!token || !userId) return;
@@ -68,21 +57,26 @@ export default function ChatPage() {
         ? data.messages
         : [];
 
+	if (data?.user) {
+  setOtherUser(data.user);
+}
+
+if (data?.presence) {
+  setPresence(data.presence);
+}
+
       setMessages(msgs);
 
       // 👤 optional user + presence (safe fallback)
       if (data.user) {
-        setOtherUser(data.user);
-        setPresence({
-          isOnline: data.user.isOnline,
-          lastActive: data.user.lastActive,
-        });
+        setOtherUser(data.user);	
       } else if (msgs.length > 0) {
         const first = msgs[0];
         const user =
-          first.sender?._id === currentUserId
-            ? first.receiver
-            : first.sender;
+  first.sender?._id?.toString() ===
+  currentUserId?.toString()
+    ? first.receiver
+    : first.sender;
 
         setOtherUser(user);
       }
@@ -140,6 +134,71 @@ export default function ChatPage() {
     }
   }, [token, userId]);
 
+
+const formatLastActive = (date) => {
+  if (!date) return "a while ago";
+
+  const seconds = Math.floor(
+    (new Date() - new Date(date)) / 1000
+  );
+
+  if (seconds < 60) {
+    return "just now";
+  }
+
+  if (seconds < 3600) {
+    return `${Math.floor(seconds / 60)}m ago`;
+  }
+
+  if (seconds < 86400) {
+    return `${Math.floor(seconds / 3600)}h ago`;
+  }
+
+  return `${Math.floor(seconds / 86400)}d ago`;
+};
+
+
+const formatMessageTime = (date) => {
+  const messageDate = new Date(date);
+  const now = new Date();
+
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  const messageDay = new Date(
+    messageDate.getFullYear(),
+    messageDate.getMonth(),
+    messageDate.getDate()
+  );
+
+  const time = messageDate.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  // Today
+  if (messageDay.getTime() === today.getTime()) {
+    return time;
+  }
+
+  // Yesterday
+  if (messageDay.getTime() === yesterday.getTime()) {
+    return `Yesterday • ${time}`;
+  }
+
+  // Older
+  return `${messageDate.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+  })} • ${time}`;
+};
+
   return (
     <div className="h-screen bg-white dark:bg-black">
 
@@ -153,28 +212,45 @@ export default function ChatPage() {
           ←
         </button>
 
-        {otherUser && (
-          <>
-            <img
-              src={getAvatar(otherUser.profilePicture, otherUser.username)}
-              className="w-10 h-10 rounded-full"
-            />
+       {otherUser && (
+  <>
 
-            <div>
-              <p className="font-semibold text-sm dark:text-white">
-                {otherUser.username}
-              </p>
+    <div className="flex items-center gap-3">
 
-              <p className="text-xs text-gray-500">
-                {presence?.isOnline ? (
-                  <span className="text-green-500">● Online</span>
-                ) : (
-                  `Last active ${formatLastActive(presence?.lastActive)}`
-                )}
-              </p>
-            </div>
-          </>
+      {/* Avatar */}
+      <img
+        src={getAvatar(
+          otherUser?.profilePicture,
+          otherUser?.username
         )}
+        alt={otherUser?.username || "User"}
+        className="w-10 h-10 rounded-full object-cover bg-gray-200"
+      />
+
+      {/* Username + Status */}
+      <div className="min-w-0">
+        <p className="font-bold text-[15px] text-purple-600 dark:text-purple-400 truncate">
+          {otherUser?.username || "Unknown"}
+        </p>
+
+      <p className="text-xs text-gray-500">
+  {presence?.isOnline ? (
+    <span className="text-green-500 font-medium">
+      ● Online
+    </span>
+  ) : presence?.lastActive ? (
+    `Last active ${formatLastActive(
+      presence.lastActive
+    )}`
+  ) : (
+    "Loading activity..."
+  )}
+</p> 
+      </div>
+
+    </div>
+  </>
+)} 
       </div>
 
       {/* 💬 MESSAGES */}
@@ -214,12 +290,15 @@ export default function ChatPage() {
                   {msg.text}
                 </div>
 
-                <span className="text-[10px] text-gray-400 mt-1">
-                  {new Date(msg.createdAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
+               <span
+  className={`text-[10px] mt-1 ${
+    isMe
+      ? "self-end text-black dark:text-gray-200"
+      : "self-start text-gray-700 dark:text-gray-300"
+  }`}
+>
+  {formatMessageTime(msg.createdAt)}
+</span> 
               </div>
             </div>
           );
