@@ -397,21 +397,85 @@ const fetchMoreUserPosts = async () => {
       }
     );
 
-    const newPosts = res.data;
+    const newPosts = res.data || [];
 
-    if (!newPosts || newPosts.length === 0) {
+    if (!newPosts.length) {
+
       setHasMore(false);
+
     } else {
+
+      // add posts
       setUserPosts((prev) => [
         ...prev,
         ...newPosts,
       ]);
+
+
+      // sync liked state for newly loaded posts
+      const token = localStorage.getItem("token");
+
+      if (token) {
+
+        try {
+
+          const payload = JSON.parse(
+            atob(token.split(".")[1])
+          );
+
+          const currentUserId = payload.id;
+
+          const newLikedPosts = {};
+
+          newPosts.forEach((post) => {
+
+            newLikedPosts[post._id] =
+              post.likes?.some((like) => {
+
+                if (typeof like === "string") {
+                  return like === currentUserId;
+                }
+
+                if (like?._id) {
+                  return like._id === currentUserId;
+                }
+
+                if (like?.user?._id) {
+                  return like.user._id === currentUserId;
+                }
+
+                return false;
+
+              }) || false;
+
+          });
+
+
+          setLikedPosts((prev) => ({
+            ...prev,
+            ...newLikedPosts,
+          }));
+
+
+        } catch (e) {
+          console.error("Like state error:", e);
+        }
+
+      }
+
     }
 
   } catch (err) {
-    console.error("Error loading more posts:", err);
+
+    console.error(
+      "Error loading more posts:",
+      err
+    );
+
   } finally {
+
     setLoadingMore(false);
+
   }
 };
 
@@ -458,173 +522,159 @@ const getCurrentUserId = () => {
 };
   // Like/unlike a post
 const handleLike = async (post) => {
-  if (!post || !post._id) return;
-  
-  // Get current user ID
+  if (!post?._id) return;
+
   const token = localStorage.getItem("token");
+
   let currentUserId = null;
+
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
       currentUserId = payload.id;
-    } catch (error) {
-      console.error("Error getting user ID:", error);
+    } catch (err) {
+      console.error("Token error", err);
     }
   }
-  
+
   if (!currentUserId) {
-    router.push('/login');
+    router.push("/login");
     return;
   }
-  
-  // Store current state for optimistic update
-  const wasLiked = likedPosts[post._id];
-  
-  // Optimistic update: Immediately change UI
-  setLikedPosts(prev => ({
-    ...prev,
-    [post._id]: !wasLiked
-  }));
-  
-  // Optimistically update likes count in userPosts
-  setUserPosts(prev => prev.map(p => 
-    p._id === post._id 
-      ? { 
-          ...p, 
-          likes: wasLiked 
-            ? p.likes?.filter(like => {
-                // Handle different like structures
-                if (typeof like === 'string') {
-                  return like !== currentUserId;
-                } else if (like._id) {
-                  return like._id !== currentUserId;
-                } else if (like.user?._id) {
-                  return like.user._id !== currentUserId;
-                }
-                return true;
-              })
-            : [...(p.likes || []), currentUserId]
-        } 
-      : p
-  ));
-  
-  // Also update global posts context if available
-  if (postsContext && typeof postsContext.setPosts === "function") {
-    postsContext.setPosts(prev => prev.map(p => 
-      p._id === post._id 
-        ? { 
-            ...p, 
-            likes: wasLiked 
-              ? p.likes?.filter(like => {
-                  if (typeof like === 'string') {
-                    return like !== currentUserId;
-                  } else if (like._id) {
-                    return like._id !== currentUserId;
-                  } else if (like.user?._id) {
-                    return like.user._id !== currentUserId;
-                  }
-                  return true;
-                })
-              : [...(p.likes || []), currentUserId]
-          } 
-        : p
-    ));
-  }
-  
-  setActionLoading((s) => ({ ...s, [post._id]: true }));
-  
-  try {
-    const res = await fetch(`${API_BASE}/posts/${post._id}/like`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-    });
-    
-    const updated = await res.json();
 
-    // Update with server response
-    setUserPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
-    
-    if (postsContext && typeof postsContext.setPosts === "function") {
-      postsContext.setPosts((prev) => prev.map((p) => (p._id === updated._id ? updated : p)));
-    }
-    
-    // Update likedPosts with accurate state from server
-    const userLiked = updated.likes?.some(like => {
-      if (typeof like === 'string') {
-        return like === currentUserId;
-      } else if (like._id) {
-        return like._id === currentUserId;
-      } else if (like.user?._id) {
-        return like.user._id === currentUserId;
-      }
-      return false;
-    });
-    
-    setLikedPosts(prev => ({
-      ...prev,
-      [post._id]: userLiked
-    }));
-    
-  } catch (err) {
-    console.error("Like error:", err);
-    
-    // Revert optimistic update on error
-    setLikedPosts(prev => ({
-      ...prev,
-      [post._id]: wasLiked
-    }));
-    
-    // Revert posts states
-    setUserPosts(prev => prev.map(p => 
-      p._id === post._id 
-        ? { 
-            ...p, 
-            likes: wasLiked 
-              ? [...(p.likes || []), currentUserId]
-              : p.likes?.filter(like => {
-                  if (typeof like === 'string') {
-                    return like !== currentUserId;
-                  } else if (like._id) {
-                    return like._id !== currentUserId;
-                  } else if (like.user?._id) {
-                    return like.user._id !== currentUserId;
-                  }
-                  return true;
-                })
-          } 
+
+  const wasLiked = likedPosts[post._id];
+
+
+  // instant UI update
+  setLikedPosts((prev) => ({
+    ...prev,
+    [post._id]: !wasLiked,
+  }));
+
+
+  // instant count update
+  setUserPosts((prev) =>
+    prev.map((p) =>
+      p._id === post._id
+        ? {
+            ...p,
+            likes: wasLiked
+              ? p.likes.filter((like) =>
+                  typeof like === "string"
+                    ? like !== currentUserId
+                    : like._id !== currentUserId
+                )
+              : [
+                  ...(p.likes || []),
+                  currentUserId
+                ],
+          }
         : p
-    ));
-    
-    if (postsContext && typeof postsContext.setPosts === "function") {
-      postsContext.setPosts(prev => prev.map(p => 
-        p._id === post._id 
-          ? { 
-              ...p, 
-              likes: wasLiked 
-                ? [...(p.likes || []), currentUserId]
-                : p.likes?.filter(like => {
-                    if (typeof like === 'string') {
-                      return like !== currentUserId;
-                    } else if (like._id) {
-                      return like._id !== currentUserId;
-                    } else if (like.user?._id) {
-                      return like.user._id !== currentUserId;
-                    }
-                    return true;
-                  })
-            } 
-          : p
-      ));
+    )
+  );
+
+
+  setActionLoading((prev) => ({
+    ...prev,
+    [post._id]: true,
+  }));
+
+
+  try {
+
+    const res = await fetch(
+      `${API_BASE}/posts/${post._id}/like`,
+      {
+        method: "PUT",
+        headers: getAuthHeaders(),
+      }
+    );
+
+
+    if (!res.ok) {
+      throw new Error("Like failed");
     }
-    
+
+
+    const updatedPost = await res.json();
+
+
+// Update post first
+setUserPosts((prev) =>
+  prev.map((p) =>
+    p._id === updatedPost._id
+      ? {
+          ...updatedPost,
+          likes: updatedPost.likes || [],
+        }
+      : p
+  )
+);
+
+
+// Calculate like state from server data
+const userLiked = (updatedPost.likes || []).some((like) => {
+
+  if (typeof like === "string") {
+    return like === currentUserId;
+  }
+
+  if (like?._id) {
+    return like._id === currentUserId;
+  }
+
+  if (like?.user?._id) {
+    return like.user._id === currentUserId;
+  }
+
+  return false;
+
+});
+
+
+setLikedPosts((prev) => ({
+  ...prev,
+  [updatedPost._id]: userLiked,
+}));
+
+
+  } catch (err) {
+
+    console.error(err);
+
+
+    // rollback
+    setLikedPosts((prev) => ({
+      ...prev,
+      [post._id]: wasLiked,
+    }));
+
+
+    setUserPosts((prev) =>
+      prev.map((p) =>
+        p._id === post._id
+          ? post
+          : p
+      )
+    );
+
+
   } finally {
-    setActionLoading((s) => ({ ...s, [post._id]: false }));
+
+    setActionLoading((prev) => ({
+      ...prev,
+      [post._id]: false,
+    }));
+
   }
 };
 
-  const toggleLikesList = (postId) => {
-    setLikesListOpenFor((prev) => (prev === postId ? null : postId));
-  };
+ const toggleLikesList = (postId) => {
+  setLikesListOpenFor((prev) =>
+    prev === postId ? null : postId
+  );
+};
 
   const handleComment = async (postId) => {
   const text = commentInputs[postId];
@@ -2286,7 +2336,92 @@ const sendPrivateFeedback = async (postId) => {
   )}
 
 </div> 
+{/* Likes dropdown */}
+{likesListOpenFor === post._id && (
+  <div className="absolute left-4 mt-2 bg-white dark:bg-gray-900
+                  border border-gray-300 dark:border-gray-700
+                  rounded-lg shadow-lg p-3 w-60 z-50">
 
+    <div className="text-sm font-semibold mb-3 pb-2 border-b
+                    border-gray-200 dark:border-gray-700
+                    text-gray-800 dark:text-gray-100
+                    bg-gray-50 dark:bg-gray-800
+                    px-2 py-1 rounded-t">
+      Liked by ({post.likes?.length || 0})
+    </div>
+
+
+    <div className="max-h-48 overflow-y-auto
+                    bg-gray-50/30 dark:bg-gray-900/30 rounded">
+
+      {post.likes?.length ? (
+
+        post.likes.map((u, index) => {
+
+
+  const likeUser =
+    u.user || u;
+
+  const username =
+    likeUser?.username || "User";
+
+  const avatar =
+    imageUrl(likeUser?.profilePicture);
+
+
+  return (
+    <a
+      key={u._id || index}
+      href={`/profile/${username}`}
+      className="flex items-center space-x-3 p-2 hover:bg-purple-50"
+    >
+
+      {getAvatar(
+        avatar,
+        username,
+        8
+      )}
+
+      <span>
+        {username}
+      </span>
+
+    </a>
+  );
+})
+
+      ) : (
+
+        <div className="py-6 text-center">
+
+          <FiHeart className="w-5 h-5 mx-auto text-gray-400" />
+
+          <p className="text-sm text-gray-500">
+            No likes yet
+          </p>
+
+        </div>
+
+      )}
+
+    </div>
+
+
+    <div className="mt-3 pt-2 border-t
+                    border-gray-200 dark:border-gray-700
+                    text-right">
+
+      <button
+        onClick={() => setLikesListOpenFor(null)}
+        className="text-xs text-gray-500 hover:text-gray-700"
+      >
+        Close
+      </button>
+
+    </div>
+
+  </div>
+)}
                   
      {/* Comments */}
 <div className="mt-3 space-y-2">
@@ -2882,11 +3017,14 @@ const sendPrivateFeedback = async (postId) => {
             if (!feedback) return null;
 
 
-            const username =
-              feedback.user?.username || "User";
+            const feedbackUser =
+  feedback.user || feedback.author || {};
 
-            const avatarSrc =
-              imageUrl(feedback.user?.profilePicture);
+const username =
+  feedbackUser.username || "User";
+
+const avatarSrc =
+  imageUrl(feedbackUser.profilePicture);
 
 
             return (

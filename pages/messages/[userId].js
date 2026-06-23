@@ -13,6 +13,7 @@ export default function ChatPage() {
   const [token, setToken] = useState(null);
   const [otherUser, setOtherUser] = useState(null);
   const [presence, setPresence] = useState(null);
+  const [sending, setSending] = useState(false);
 
   const bottomRef = useRef(null);
   const lastMsgRef = useRef(null);
@@ -32,74 +33,272 @@ export default function ChatPage() {
     }
   })();
 
-  const getAvatar = (url, name) => {
-    if (url && url.startsWith("http")) return url;
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      name || "User"
-    )}&background=7c3aed&color=fff`;
-  };
+ const getAvatar = (url, name, userId = null) => {
+
+  // Check cache first
+  if (
+    userId &&
+    typeof window !== "undefined"
+  ) {
+    const cached = localStorage.getItem(
+      `infinity_avatar_${userId}`
+    );
+
+    if (cached) {
+      return cached;
+    }
+  }
+
+
+  // Use real avatar and cache it
+  if (url && url.startsWith("http")) {
+
+    if (
+      userId &&
+      typeof window !== "undefined"
+    ) {
+      localStorage.setItem(
+        `infinity_avatar_${userId}`,
+        url
+      );
+    }
+
+    return url;
+  }
+
+
+  // Fallback avatar
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    name || "User"
+  )}&background=7c3aed&color=fff`;
+}; 
+
+const saveMessagesCache = (id, data) => {
+  if (!id) return;
+
+  localStorage.setItem(
+    `infinity_messages_${id}`,
+    JSON.stringify({
+      messages: data,
+      savedAt: Date.now()
+    })
+  );
+};
+
+
+const getMessagesCache = (id) => {
+  if (!id) return null;
+
+  const cached = localStorage.getItem(
+    `infinity_messages_${id}`
+  );
+
+  if (!cached) return null;
+
+  try {
+    const parsed = JSON.parse(cached);
+
+    // optional expiry: 24 hours
+    if (
+      Date.now() - parsed.savedAt >
+      86400000
+    ) {
+      localStorage.removeItem(
+        `infinity_messages_${id}`
+      );
+      return null;
+    }
+
+    return parsed.messages;
+
+  } catch {
+    return null;
+  }
+};
+
+const saveUserCache = (id, user) => {
+  if (!id || !user) return;
+
+  localStorage.setItem(
+    `infinity_chat_user_${id}`,
+    JSON.stringify(user)
+  );
+};
+
+
+const getUserCache = (id) => {
+  if (!id || typeof window === "undefined") return null;
+
+  const cached = localStorage.getItem(
+    `infinity_chat_user_${id}`
+  );
+
+  return cached ? JSON.parse(cached) : null;
+};
 
   // 📥 FIXED FETCH (CRITICAL FIX HERE)
   const fetchMessages = async () => {
-    if (!token || !userId) return;
+  if (!token || !userId) return;
 
-    try {
-      const res = await fetch(`${API_BASE}/messages/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  try {
 
-      const data = await res.json();
+    // ⚡ Load cached messages first
+    const cached = getMessagesCache(userId);
 
-      // ✅ FIX: handle BOTH array and object responses
-      const msgs = Array.isArray(data)
-        ? data
-        : Array.isArray(data.messages)
-        ? data.messages
-        : [];
-
-	if (data?.user) {
-  setOtherUser(data.user);
-}
-
-if (data?.presence) {
-  setPresence(data.presence);
-}
-
-      setMessages(msgs);
-
-      // 👤 optional user + presence (safe fallback)
-      if (data.user) {
-        setOtherUser(data.user);	
-      } else if (msgs.length > 0) {
-        const first = msgs[0];
-        const user =
-  first.sender?._id?.toString() ===
-  currentUserId?.toString()
-    ? first.receiver
-    : first.sender;
-
-        setOtherUser(user);
-      }
-
-      // 🔽 auto scroll fix
-      const last = msgs[msgs.length - 1];
-      if (last && last._id !== lastMsgRef.current) {
-        lastMsgRef.current = last._id;
-
-        setTimeout(() => {
-          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
-      }
-    } catch (err) {
-      console.error("Fetch error:", err);
+    if (cached) {
+      setMessages(cached);
     }
-  };
+
+const cachedUser = getUserCache(userId);
+
+if (cachedUser) {
+  setOtherUser(cachedUser);
+}
+
+    const res = await fetch(`${API_BASE}/messages/${userId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+
+    const data = await res.json();
+
+
+    // ✅ FIX: handle BOTH array and object responses
+    const msgs = Array.isArray(data)
+      ? data
+      : Array.isArray(data.messages)
+      ? data.messages
+      : [];
+
+
+    if (data?.user) {
+
+  setOtherUser(data.user);
+
+  saveUserCache(
+    userId,
+    data.user
+  );
+
+}
+
+
+    if (data?.presence) {
+      setPresence(data.presence);
+    }
+
+
+    // Fresh server messages
+    setMessages(msgs);
+
+
+    // 💾 Save latest messages to cache
+    saveMessagesCache(
+      userId,
+      msgs
+    );
+
+
+    // 👤 optional user + presence (safe fallback)
+    if (data.user) {
+
+      setOtherUser(data.user);
+
+    } else if (msgs.length > 0) {
+
+      const first = msgs[0];
+
+      const user =
+        first.sender?._id?.toString() ===
+        currentUserId?.toString()
+          ? first.receiver
+          : first.sender;
+
+
+      setOtherUser(user);
+
+saveUserCache(
+  userId,
+  user
+);
+    }
+
+
+    // 🔽 auto scroll fix
+    const last = msgs[msgs.length - 1];
+
+    if (
+      last &&
+      last._id !== lastMsgRef.current
+    ) {
+
+      lastMsgRef.current = last._id;
+
+
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({
+          behavior: "smooth",
+        });
+      }, 100);
+
+    }
+
+
+  } catch (err) {
+
+    console.error(
+      "Fetch error:",
+      err
+    );
+
+  }
+};
 
   const handleSend = async () => {
-    if (!text.trim()) return;
+  const messageText = text.trim();
 
-    try {
-      const res = await fetch(`${API_BASE}/messages`, {
+  if (!messageText || sending) return;
+
+  setSending(true);
+
+  const tempMessage = {
+    _id: `temp-${Date.now()}`,
+    text: messageText,
+    createdAt: new Date(),
+    sender: {
+      _id: currentUserId,
+    },
+    pending: true,
+  };
+
+
+  // show instantly
+  setMessages((prev) => {
+
+  const updated = [
+    ...prev,
+    tempMessage,
+  ];
+
+  saveMessagesCache(
+    userId,
+    updated
+  );
+
+  return updated;
+});
+
+  // clear input immediately
+  setText("");
+
+
+  try {
+
+    const res = await fetch(
+      `${API_BASE}/messages`,
+      {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -107,32 +306,123 @@ if (data?.presence) {
         },
         body: JSON.stringify({
           receiverId: userId,
-          text,
+          text: messageText,
         }),
-      });
-
-      const newMsg = await res.json();
-
-      if (res.ok) {
-        setMessages((prev) => [...prev, newMsg]);
-        setText("");
-
-        setTimeout(() => {
-          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
       }
-    } catch (err) {
-      console.error(err);
+    );
+
+
+    const newMsg = await res.json();
+
+
+    if (!res.ok) {
+      throw new Error(
+        newMsg.message || "Failed"
+      );
     }
-  };
+
+
+    // replace temporary message
+   setMessages((prev) => {
+
+  const updated = prev.map((msg) =>
+    msg._id === tempMessage._id
+      ? {
+          ...newMsg,
+          sender: newMsg.sender || {
+            _id: currentUserId,
+          },
+          createdAt:
+            newMsg.createdAt || new Date(),
+        }
+      : msg
+  );
+
+
+  saveMessagesCache(
+    userId,
+    updated
+  );
+
+
+  return updated;
+}); 
+
+
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({
+        behavior: "smooth",
+      });
+    }, 100);
+
+
+  } catch (err) {
+
+    console.error(err);
+
+
+    // remove failed message
+    setMessages((prev) => {
+
+  const updated = prev.filter(
+    (msg) =>
+      msg._id !== tempMessage._id
+  );
+
+
+  saveMessagesCache(
+    userId,
+    updated
+  );
+
+
+  return updated;
+});
+
+
+    // return text back
+    setText(messageText);
+
+  } finally {
+
+    setSending(false);
+
+  }
+}
+
+const markSeen = async () => {
+  if (!token || !userId) return;
+
+  try {
+    await fetch(
+      `${API_BASE}/messages/seen/${userId}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+  } catch (err) {
+    console.error("Mark seen error:", err);
+  }
+};
 
   useEffect(() => {
-    if (token && userId) {
-      fetchMessages();
-      const interval = setInterval(fetchMessages, 4000);
-      return () => clearInterval(interval);
-    }
-  }, [token, userId]);
+  if (token && userId) {
+
+    markSeen();
+
+    fetchMessages();
+
+    const interval = setInterval(
+      fetchMessages,
+      4000
+    );
+
+    return () => clearInterval(interval);
+  }
+}, [token, userId]);
 
 
 const formatLastActive = (date) => {
@@ -199,6 +489,25 @@ const formatMessageTime = (date) => {
   })} • ${time}`;
 };
 
+const getCachedAvatar = (userId, avatarUrl) => {
+  if (!userId) return avatarUrl;
+
+  const key = `infinity_avatar_${userId}`;
+
+  const cached = localStorage.getItem(key);
+
+  if (cached) {
+    return cached;
+  }
+
+  if (avatarUrl) {
+    localStorage.setItem(key, avatarUrl);
+    return avatarUrl;
+  }
+
+  return "";
+};
+
   return (
     <div className="h-screen bg-white dark:bg-black">
 
@@ -218,14 +527,15 @@ const formatMessageTime = (date) => {
     <div className="flex items-center gap-3">
 
       {/* Avatar */}
-      <img
-        src={getAvatar(
-          otherUser?.profilePicture,
-          otherUser?.username
-        )}
-        alt={otherUser?.username || "User"}
-        className="w-10 h-10 rounded-full object-cover bg-gray-200"
-      />
+     <img
+  src={getAvatar(
+    otherUser?.profilePicture,
+    otherUser?.username,
+    otherUser?._id
+  )}
+  alt={otherUser?.username || "User"}
+  className="w-10 h-10 rounded-full object-cover bg-gray-200"
+/> 
 
       {/* Username + Status */}
       <div className="min-w-0">
@@ -268,13 +578,14 @@ const formatMessageTime = (date) => {
             >
 
               {!isMe && (
-                <img
-                  src={getAvatar(
-                    msg.sender?.profilePicture,
-                    msg.sender?.username
-                  )}
-                  className="w-6 h-6 rounded-full"
-                />
+               <img
+  src={getAvatar(
+    msg.sender?.profilePicture,
+    msg.sender?.username,
+    msg.sender?._id
+  )}
+  className="w-6 h-6 rounded-full"
+/> 
               )}
 
               <div className="flex flex-col max-w-xs">
@@ -318,11 +629,16 @@ const formatMessageTime = (date) => {
         />
 
         <button
-          onClick={handleSend}
-          className="bg-purple-600 text-white px-5 py-2 rounded-full"
-        >
-          Send
-        </button>
+  onClick={handleSend}
+  disabled={sending}
+  className={`px-5 py-2 rounded-full text-white ${
+    sending
+      ? "bg-gray-400 cursor-not-allowed"
+      : "bg-purple-600 hover:bg-purple-700"
+  }`}
+>
+  {sending ? "Sending..." : "Send"}
+</button>
 
       </div>
     </div>

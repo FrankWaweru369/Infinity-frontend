@@ -6,8 +6,10 @@ import { ThemeProvider } from "../context/ThemeContext";
 import Head from "next/head";
 import InstallPWA from "../components/installPWA";
 import ThemeToggle from "../components/ThemeToggle";
+import useBackButton from "../src/hooks/useBackButton";
 
 export default function App({ Component, pageProps }) {
+	useBackButton();
   return (
     <>
       <Head>

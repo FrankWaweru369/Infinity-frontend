@@ -63,14 +63,13 @@ export default function MessagesInbox() {
     )}&background=7c3aed&color=fff`;
   };
 
-  // Loading state
+   // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-500">
-        Loading messages...
-      </div>
+        Loading messages...                                                                                </div>
     );
-  }
+  } 
 const getUserIdFromToken = () => {
   if (!token) return null;
 

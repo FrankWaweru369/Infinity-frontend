@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [feedbackInputs, setFeedbackInputs] = useState({});
   const [feedbackLoading, setFeedbackLoading] = useState({});
   const [expandedPosts, setExpandedPosts] = useState({});
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const observerRef = useRef(null);
 
 
@@ -200,6 +201,43 @@ useEffect(() => {
 
     validateTokenAndAuth();
   }, []);
+
+const fetchUnreadMessages = async () => {
+  try {
+    const res = await fetch(
+      `${API_BASE}/messages/unread-count`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    const data = await res.json();
+
+    setUnreadMessages(data.count || 0);
+
+  } catch (err) {
+    console.error(
+      "Unread count error:",
+      err
+    );
+  }
+};
+
+
+useEffect(() => {
+
+  fetchUnreadMessages();
+
+  const interval = setInterval(
+    fetchUnreadMessages,
+    5000
+  );
+
+  return () =>
+    clearInterval(interval);
+
+}, []);
+
 
   const fetchUserData = async (token, userIdFromToken) => {
     try {
@@ -1478,11 +1516,30 @@ const sendPrivateFeedback = async (postId) => {
 
       {/* Messages */}
       <a
-        href="/messages"
-        className="relative p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition"
-      >
-        <FiMessageCircle className="w-5 h-5 text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark" />
-      </a>
+  href="/messages"
+  className="relative p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition"
+>
+
+  <FiMessageCircle
+    className="w-5 h-5 text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-infinityPurpleDark"
+  />
+
+
+  {unreadMessages > 0 && (
+    <span
+      className="
+        absolute -top-1 -right-1
+        bg-red-500 text-white
+        text-[10px] font-bold
+        w-5 h-5 rounded-full
+        flex items-center justify-center
+      "
+    >
+      {unreadMessages}
+    </span>
+  )}
+
+</a>
 
       {/* Notifications */}
       <Notifications token={token} />
